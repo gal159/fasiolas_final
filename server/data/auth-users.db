@@ -1,0 +1,2 @@
+{"$$indexCreated":{"fieldName":"email","unique":true,"sparse":false}}
+{"id":"cc4ca90b7b8a254b0c43bb2f8c50d321","email":"ciuta.dziugas@gmail.com","playerName":"gr8fate","passwordHash":"6064b8921a5b7bbeb9aef0bdf0499714:383898314fbb67183823abe2bd2f20f88ad1b7403a30161fa4424189550389d61d0c49f403bc6068e090da2b96749418901144a814a68a6499d83dae0237326a","resetTokenHash":null,"resetTokenExpiresAt":null,"createdAt":1783623169011,"updatedAt":1783623169011,"_id":"TtIKzve5ZXJ5DiA6"}

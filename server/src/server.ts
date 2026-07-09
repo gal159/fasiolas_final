@@ -1,6 +1,10 @@
+import "dotenv/config";
 import cors from "cors";
 import express from "express";
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
+import { resolve } from "node:path";
+import Datastore from "nedb-promises";
 import { Server } from "socket.io";
 import { z } from "zod";
 import {
@@ -19,8 +23,203 @@ import { GameEngine } from "./gameEngine";
 
 const app = express();
 app.use(cors({ origin: "*" }));
+app.use(express.json());
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
+});
+
+const CLIENT_URL = process.env.CLIENT_URL ?? "http://localhost:5173";
+const APP_SECRET = process.env.APP_SECRET ?? "dev-secret-change-me";
+
+const AUTH_DB_PATH = resolve(process.cwd(), "data", "auth-users.db");
+
+type AuthUser = {
+  id: string;
+  email: string;
+  playerName: string;
+  passwordHash: string;
+  resetTokenHash: string | null;
+  resetTokenExpiresAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
+const registerSchema = z.object({
+  email: z.string().trim().email().max(120),
+  playerName: z.string().trim().min(2).max(24),
+  password: z.string().min(8).max(128),
+});
+
+const loginSchema = z.object({
+  email: z.string().trim().email().max(120),
+  password: z.string().min(1).max(128),
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().trim().email().max(120),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().trim().min(20).max(256),
+  password: z.string().min(8).max(128),
+});
+
+const authUsersDb = Datastore.create({
+  filename: AUTH_DB_PATH,
+  autoload: true,
+}) as Datastore<AuthUser>;
+
+void authUsersDb.ensureIndex({ fieldName: "email", unique: true });
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function hashToken(raw: string): string {
+  return createHash("sha256").update(`${raw}:${APP_SECRET}`).digest("hex");
+}
+
+function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString("hex");
+  const digest = scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${digest}`;
+}
+
+function verifyPassword(password: string, storedHash: string): boolean {
+  const parts = storedHash.split(":");
+  if (parts.length !== 2) {
+    return false;
+  }
+  const [salt, digestHex] = parts;
+  const digest = scryptSync(password, salt, 64);
+  const expected = Buffer.from(digestHex, "hex");
+  if (expected.length !== digest.length) {
+    return false;
+  }
+  return timingSafeEqual(digest, expected);
+}
+
+app.post("/auth/register", async (req, res) => {
+  try {
+    const parsed = registerSchema.parse(req.body);
+    const email = normalizeEmail(parsed.email);
+    const playerName = parsed.playerName.trim();
+    const now = Date.now();
+
+    const existingUser = await authUsersDb.findOne({ email });
+    if (existingUser) {
+      res.status(409).json({ ok: false, error: "Sis el. pastas jau uzregistruotas" });
+      return;
+    }
+
+    const nextUser: AuthUser = {
+      id: randomBytes(16).toString("hex"),
+      email,
+      playerName,
+      passwordHash: hashPassword(parsed.password),
+      resetTokenHash: null,
+      resetTokenExpiresAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await authUsersDb.insert(nextUser);
+
+    res.json({
+      ok: true,
+      message: "Registracija sekminga. Dabar galite prisijungti.",
+      playerName,
+    });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.post("/auth/login", async (req, res) => {
+  try {
+    const parsed = loginSchema.parse(req.body);
+    const email = normalizeEmail(parsed.email);
+    const user = await authUsersDb.findOne({ email });
+
+    if (!user || !verifyPassword(parsed.password, user.passwordHash)) {
+      res.status(401).json({ ok: false, error: "Neteisingas el. pastas arba slaptazodis" });
+      return;
+    }
+
+    res.json({ ok: true, email: user.email, playerName: user.playerName });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.post("/auth/forgot-password", async (req, res) => {
+  try {
+    const parsed = forgotPasswordSchema.parse(req.body);
+    const email = normalizeEmail(parsed.email);
+    const user = await authUsersDb.findOne({ email });
+
+    let previewResetLink: string | undefined;
+
+    if (user) {
+      const tokenRaw = randomBytes(32).toString("hex");
+      const tokenHash = hashToken(tokenRaw);
+      await authUsersDb.update(
+        { id: user.id },
+        {
+          $set: {
+            resetTokenHash: tokenHash,
+            resetTokenExpiresAt: Date.now() + 1000 * 60 * 30,
+            updatedAt: Date.now(),
+          },
+        },
+      );
+
+      const resetLink = `${CLIENT_URL}?resetToken=${tokenRaw}`;
+      previewResetLink = resetLink;
+    }
+
+    res.json({
+      ok: true,
+      message: "Jei toks el. pastas egzistuoja, issiunteme slaptazodzio atstatymo nuoroda.",
+      previewResetLink,
+    });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.post("/auth/reset-password", async (req, res) => {
+  try {
+    const parsed = resetPasswordSchema.parse(req.body);
+    const tokenHash = hashToken(parsed.token);
+    const now = Date.now();
+
+    const user = await authUsersDb.findOne({
+      resetTokenHash: tokenHash,
+      resetTokenExpiresAt: { $gte: now },
+    });
+
+    if (!user) {
+      res.status(400).json({ ok: false, error: "Neteisingas arba nebegaliojantis slaptazodzio atstatymo tokenas" });
+      return;
+    }
+
+    await authUsersDb.update(
+      { id: user.id },
+      {
+        $set: {
+          passwordHash: hashPassword(parsed.password),
+          resetTokenHash: null,
+          resetTokenExpiresAt: null,
+          updatedAt: now,
+        },
+      },
+    );
+
+    res.json({ ok: true, message: "Slaptazodis sekmingai atnaujintas" });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+  }
 });
 
 const httpServer = createServer(app);

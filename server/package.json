@@ -14,7 +14,9 @@
   "description": "Fasiolas game server",
   "dependencies": {
     "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "nedb-promises": "^6.2.3",
     "socket.io": "^4.8.3",
     "zod": "^4.4.3"
   },

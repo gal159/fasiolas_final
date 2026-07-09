@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 360">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#dfc6a1"/>
+      <stop offset="0.42" stop-color="#9d734a"/>
+      <stop offset="1" stop-color="#5a321f"/>
+    </linearGradient>
+    <linearGradient id="armor" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#b84b33"/>
+      <stop offset="1" stop-color="#451b13"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="360" rx="28" fill="url(#bg)"/>
+  <rect x="8" y="8" width="240" height="344" rx="24" fill="none" stroke="#1e1f26" stroke-width="6"/>
+  <path d="M68 44h120v28H68z" fill="#d9be92"/>
+  <path d="M56 66h144l-16 16H72z" fill="#7c5d3d"/>
+  <circle cx="128" cy="126" r="46" fill="#d6b48b"/>
+  <rect x="86" y="112" width="84" height="12" rx="6" fill="#2a2f38"/>
+  <ellipse cx="110" cy="126" rx="6" ry="6" fill="#e4edf4"/>
+  <ellipse cx="146" cy="126" rx="6" ry="6" fill="#e4edf4"/>
+  <rect x="98" y="145" width="60" height="16" rx="8" fill="#3f2a20"/>
+  <rect x="58" y="202" width="140" height="132" rx="20" fill="url(#armor)"/>
+  <path d="M98 204l30 44 30-44" fill="#7f2f21"/>
+</svg>
