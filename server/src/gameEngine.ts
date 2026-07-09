@@ -8,6 +8,7 @@ import type {
   EffectId,
   HatId,
   PlayerAccountState,
+  PlayerCardInfo,
   PlayerUnlocks,
   PendingFasiolasState,
   PlayerProfile,
@@ -39,6 +40,7 @@ import {
   RARITY_PRICES,
   SKIN_OPTIONS,
   SKIN_RARITY,
+  calcLevel,
 } from "../../shared/src/types";
 
 type InternalPlayer = {
@@ -46,6 +48,7 @@ type InternalPlayer = {
   name: string;
   cards: Card[];
   socketId: string;
+  authUserId: string | null;
   profile: PlayerProfile;
 };
 
@@ -132,7 +135,10 @@ function createDefaultUnlocks(): PlayerUnlocks {
 function createDefaultAccountState(): PlayerAccountState {
   return {
     points: 0,
+    registeredAt: Date.now(),
     gamesPlayed: 0,
+    gamesWon: 0,
+    gamesLost: 0,
     unlocked: createDefaultUnlocks(),
   };
 }
@@ -140,7 +146,10 @@ function createDefaultAccountState(): PlayerAccountState {
 function cloneAccountState(account: PlayerAccountState): PlayerAccountState {
   return {
     points: account.points,
+    registeredAt: account.registeredAt,
     gamesPlayed: account.gamesPlayed,
+    gamesWon: account.gamesWon ?? 0,
+    gamesLost: account.gamesLost ?? 0,
     unlocked: {
       avatars: [...account.unlocked.avatars],
       hats: [...account.unlocked.hats],
@@ -326,14 +335,28 @@ export class GameEngine {
     }
   }
 
-  public createRoom(hostName: string, socketId: string, profile?: PlayerProfile): { roomCode: string; playerId: string } {
+  public createRoom(
+    hostName: string,
+    socketId: string,
+    profile?: PlayerProfile,
+    options?: { authUserId?: string | null; registeredAt?: number },
+  ): { roomCode: string; playerId: string } {
     const roomCode = Math.random().toString(36).slice(2, 8).toUpperCase();
     const playerId = randomUUID();
     const playerProfile = profile ?? createDefaultProfile(0);
-    this.ensureAccount(playerId, playerProfile);
+    this.ensureAccount(playerId, playerProfile, { registeredAt: options?.registeredAt });
     this.rooms.set(roomCode, {
       code: roomCode,
-      players: [{ id: playerId, name: hostName, cards: [], socketId, profile: playerProfile }],
+      players: [
+        {
+          id: playerId,
+          name: hostName,
+          cards: [],
+          socketId,
+          authUserId: options?.authUserId ?? null,
+          profile: playerProfile,
+        },
+      ],
       phase: "LOBBY",
       centerDeck: [],
       revealedDrawCard: null,
@@ -352,7 +375,13 @@ export class GameEngine {
     return { roomCode, playerId };
   }
 
-  public joinRoom(roomCode: string, name: string, socketId: string, profile?: PlayerProfile): { playerId: string } {
+  public joinRoom(
+    roomCode: string,
+    name: string,
+    socketId: string,
+    profile?: PlayerProfile,
+    options?: { authUserId?: string | null; registeredAt?: number },
+  ): { playerId: string } {
     const room = this.getRoomOrThrow(roomCode);
     if (room.players.length >= 8) {
       throw new Error("Room is full");
@@ -362,8 +391,15 @@ export class GameEngine {
     }
     const playerId = randomUUID();
     const playerProfile = profile ?? createDefaultProfile(room.players.length);
-    this.ensureAccount(playerId, playerProfile);
-    room.players.push({ id: playerId, name, cards: [], socketId, profile: playerProfile });
+    this.ensureAccount(playerId, playerProfile, { registeredAt: options?.registeredAt });
+    room.players.push({
+      id: playerId,
+      name,
+      cards: [],
+      socketId,
+      authUserId: options?.authUserId ?? null,
+      profile: playerProfile,
+    });
     return { playerId };
   }
 
@@ -714,6 +750,35 @@ export class GameEngine {
     return room.players.map((p) => p.socketId);
   }
 
+  public getPlayerCardInfo(
+    roomCode: string,
+    targetPlayerId: string,
+  ): PlayerCardInfo {
+    const room = this.getRoomOrThrow(roomCode);
+    const player = room.players.find((p) => p.id === targetPlayerId);
+    if (!player) {
+      throw new Error("Player not found");
+    }
+    const account = this.playerAccounts.get(targetPlayerId) ?? createDefaultAccountState();
+    return {
+      playerName: player.name,
+      registeredAt: account.registeredAt,
+      gamesPlayed: account.gamesPlayed,
+      gamesWon: account.gamesWon ?? 0,
+      gamesLost: account.gamesLost ?? 0,
+      level: calcLevel(account.gamesPlayed),
+    };
+  }
+
+  public getPlayerAuthUserId(roomCode: string, targetPlayerId: string): string | null {
+    const room = this.getRoomOrThrow(roomCode);
+    const player = room.players.find((p) => p.id === targetPlayerId);
+    if (!player) {
+      throw new Error("Player not found");
+    }
+    return player.authUserId;
+  }
+
   private applyDealingAction(room: GameRoom, actorPlayerId: string, action: DealingAction): void {
     const actor = this.getPlayerOrThrow(room, actorPlayerId);
 
@@ -971,11 +1036,21 @@ export class GameEngine {
       const reward = BASE_POINTS_PER_GAME + (PLACEMENT_BONUS[placement] ?? 0);
       account.gamesPlayed += 1;
       account.points += reward;
+      if (placement === 1) {
+        account.gamesWon = (account.gamesWon ?? 0) + 1;
+      } else {
+        account.gamesLost = (account.gamesLost ?? 0) + 1;
+      }
     });
   }
 
-  private ensureAccount(playerId: string, profile: PlayerProfile): void {
+  private ensureAccount(playerId: string, profile: PlayerProfile, options?: { registeredAt?: number }): void {
     const account = this.playerAccounts.get(playerId) ?? createDefaultAccountState();
+    if (typeof options?.registeredAt === "number" && options.registeredAt > 0) {
+      account.registeredAt = options.registeredAt;
+    } else if (!account.registeredAt) {
+      account.registeredAt = Date.now();
+    }
     this.unlockProfileItems(account, profile);
     this.playerAccounts.set(playerId, account);
   }
