@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent as ReactMouseEvent, type TouchEvent as ReactTouchEvent } from 'react'
 import { io, type Socket } from 'socket.io-client'
 import {
   AVATAR_RARITY,
@@ -12,9 +12,11 @@ import {
   RARITY_PRICES,
   SKIN_RARITY,
   SKIN_OPTIONS,
+  calcLevel,
   type Card,
   type ClientStatePayload,
   type PlayerAccountState,
+  type PlayerCardInfo,
   type PlayerProfile,
   type RarityId,
   type ShopCatalogItem,
@@ -26,7 +28,8 @@ import './App.css'
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 const PROFILE_SLOTS_STORAGE_KEY = 'fasiolas:profile-slots'
 const LOGIN_SESSION_STORAGE_KEY = 'fasiolas:logged-in'
-const REGISTERED_USERS_STORAGE_KEY = 'fasiolas:registered-users'
+const AUTH_USER_ID_STORAGE_KEY = 'fasiolas:auth-user-id'
+const RESET_TOKEN_QUERY_KEY = 'resetToken'
 
 const AVATAR_LABELS: Record<PlayerProfile['avatarId'], string> = {
   zeus: 'Dzeusas',
@@ -121,7 +124,10 @@ function createEmptyAccount(): PlayerAccountState {
 
   return {
     points: 0,
+    registeredAt: Date.now(),
     gamesPlayed: 0,
+    gamesWon: 0,
+    gamesLost: 0,
     unlocked: {
       avatars: defaultAvatars,
       hats: HAT_OPTIONS.filter((id) => HAT_RARITY[id] === 'common'),
@@ -135,6 +141,33 @@ type ProfileSlotMap = Record<PlayerProfile['profileSlot'], PlayerProfile>
 
 function playerStorageKey(roomCode: string): string {
   return `fasiolas:${roomCode}`
+}
+
+function getStoredAuthUserId(): string | undefined {
+  const value = sessionStorage.getItem(AUTH_USER_ID_STORAGE_KEY)?.trim()
+  return value ? value : undefined
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+}
+
+type PlayerAchievement = {
+  id: string
+  title: string
+  unlocked: boolean
+}
+
+function buildPlayerAchievements(info: PlayerCardInfo): PlayerAchievement[] {
+  const totalGames = info.gamesPlayed
+  const winRate = totalGames > 0 ? (info.gamesWon / totalGames) * 100 : 0
+
+  return [
+    { id: 'starter', title: 'Starter', unlocked: totalGames >= 5 },
+    { id: 'veteran', title: 'Veteran', unlocked: totalGames >= 25 },
+    { id: 'winner', title: 'Winner', unlocked: info.gamesWon >= 10 },
+    { id: 'unstoppable', title: 'Unstoppable', unlocked: totalGames >= 15 && winRate >= 60 },
+  ]
 }
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -243,6 +276,19 @@ function cardLabel(card: Card | null): string {
   return `${card.rank}${card.suit}`
 }
 
+function suitSymbol(suit: Card['suit']): string {
+  if (suit === 'S') {
+    return '♠'
+  }
+  if (suit === 'H') {
+    return '♥'
+  }
+  if (suit === 'D') {
+    return '♦'
+  }
+  return '♣'
+}
+
 function suitGlyphClass(suit: Card['suit']): string {
   if (suit === 'S') {
     return 'spade'
@@ -295,6 +341,62 @@ function cardColorClass(suit: Card['suit']): string {
   return 'black'
 }
 
+type PlayingHandSortMode = 'suit' | 'rank'
+
+type PlayingHandEntry = {
+  card: Card
+  index: number
+}
+
+const SUIT_SORT_ORDER: Record<Card['suit'], number> = {
+  C: 0,
+  D: 1,
+  H: 2,
+  S: 3,
+}
+
+const RANK_SORT_ORDER: Record<Card['rank'], number> = {
+  '2': 0,
+  '3': 1,
+  '4': 2,
+  '5': 3,
+  '6': 4,
+  '7': 5,
+  '8': 6,
+  '9': 7,
+  '10': 8,
+  J: 9,
+  Q: 10,
+  K: 11,
+  A: 12,
+}
+
+function sortPlayingHandEntries(entries: PlayingHandEntry[], mode: PlayingHandSortMode): PlayingHandEntry[] {
+  return [...entries].sort((left, right) => {
+    if (mode === 'suit') {
+      const bySuit = SUIT_SORT_ORDER[left.card.suit] - SUIT_SORT_ORDER[right.card.suit]
+      if (bySuit !== 0) {
+        return bySuit
+      }
+      const byRank = RANK_SORT_ORDER[left.card.rank] - RANK_SORT_ORDER[right.card.rank]
+      if (byRank !== 0) {
+        return byRank
+      }
+      return left.index - right.index
+    }
+
+    const byRank = RANK_SORT_ORDER[left.card.rank] - RANK_SORT_ORDER[right.card.rank]
+    if (byRank !== 0) {
+      return byRank
+    }
+    const bySuit = SUIT_SORT_ORDER[left.card.suit] - SUIT_SORT_ORDER[right.card.suit]
+    if (bySuit !== 0) {
+      return bySuit
+    }
+    return left.index - right.index
+  })
+}
+
 function normalizeLegacyProfile(profile: PlayerProfile): PlayerProfile {
   const avatarAliases: Record<string, PlayerProfile['avatarId']> = {
     wizard: 'mage',
@@ -339,13 +441,23 @@ function getRingRadiusPercent(playerCount: number): { x: number; y: number } {
   return { x: 45, y: 34 }
 }
 
+function displayNameFromEmail(email: string): string {
+  const localPart = email.split('@')[0]?.trim()
+  return localPart || 'Player'
+}
+
 function App() {
   const initialSlots = useMemo(() => loadStoredProfileSlots(), [])
-  const [isLoggedIn, setIsLoggedIn] = useState(() => sessionStorage.getItem(LOGIN_SESSION_STORAGE_KEY) === '1')
+  const [isLoggedIn, setIsLoggedIn] = useState(() => Boolean(sessionStorage.getItem(LOGIN_SESSION_STORAGE_KEY)))
+  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot' | 'reset'>('login')
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState('')
+  const [registerPlayerName, setRegisterPlayerName] = useState('')
   const [loginError, setLoginError] = useState('')
   const [loginInfo, setLoginInfo] = useState('')
+  const [resetToken, setResetToken] = useState('')
   const [socket, setSocket] = useState<Socket | null>(null)
   const [name, setName] = useState('')
   const [roomCodeInput, setRoomCodeInput] = useState('')
@@ -362,6 +474,11 @@ function App() {
   const [showTableWindow, setShowTableWindow] = useState(false)
   const [showProfileWindow, setShowProfileWindow] = useState(false)
   const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null)
+  const [playingHandSortMode, setPlayingHandSortMode] = useState<PlayingHandSortMode>('suit')
+  const [flippedBadgeId, setFlippedBadgeId] = useState<string | null>(null)
+  const [playerCardInfoCache, setPlayerCardInfoCache] = useState<Record<string, PlayerCardInfo>>({})
+  const [loadingCardInfoId, setLoadingCardInfoId] = useState<string | null>(null)
+  const flipContainerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     const s = io(SERVER_URL)
@@ -404,8 +521,35 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    const params = new URLSearchParams(window.location.search)
+    const token = params.get(RESET_TOKEN_QUERY_KEY)
+    if (token) {
+      setResetToken(token)
+      setAuthMode('reset')
+      setLoginInfo('Ivesk nauja slaptazodi')
+      setLoginError('')
+    }
+  }, [])
+
+  useEffect(() => {
     sessionStorage.setItem(PROFILE_SLOTS_STORAGE_KEY, JSON.stringify(profileSlots))
   }, [profileSlots])
+
+  useEffect(() => {
+    if (!flippedBadgeId) return
+    function handleClickAway(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (!target.closest('.flipCard')) {
+        setFlippedBadgeId(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickAway)
+    return () => document.removeEventListener('mousedown', handleClickAway)
+  }, [flippedBadgeId])
 
   useEffect(() => {
     setProfileDraft(withSlot(profileSlots[activeProfileSlot], activeProfileSlot))
@@ -496,6 +640,13 @@ function App() {
     [payload],
   )
 
+  const accountLevel = useMemo(() => calcLevel(account.gamesPlayed), [account.gamesPlayed])
+  const accountLevelProgress = useMemo(() => (account.gamesPlayed % 5) / 5, [account.gamesPlayed])
+  const accountLevelGamesLeft = useMemo(() => {
+    const modulo = account.gamesPlayed % 5
+    return modulo === 0 ? 5 : 5 - modulo
+  }, [account.gamesPlayed])
+
   const profilePanelProfile = useMemo(
     () => me?.profile ?? profileDraft,
     [me, profileDraft],
@@ -523,6 +674,14 @@ function App() {
   }, [payload])
 
   const showHandInCurrentPhase = visibleHandIndices.length > 0
+  const sortedPlayingHand = useMemo<PlayingHandEntry[]>(() => {
+    if (!payload) {
+      return []
+    }
+    const entries = payload.yourHand.map((card, index) => ({ card, index }))
+    return sortPlayingHandEntries(entries, playingHandSortMode)
+  }, [payload, playingHandSortMode])
+
   const canDrawFromCenterDeck = Boolean(
     payload &&
       isMyTurn &&
@@ -589,16 +748,62 @@ function App() {
       return []
     }
 
-    const winners = payload.state.winnerPlayerIds
+    const rankedPlayers = payload.state.finalRankingPlayerIds
       .map((id) => payload.state.players.find((player) => player.id === id))
       .filter((player): player is NonNullable<typeof player> => Boolean(player))
 
-    const loser = payload.state.loserPlayerId
-      ? payload.state.players.find((player) => player.id === payload.state.loserPlayerId) ?? null
-      : null
+    const missingPlayers = payload.state.players.filter(
+      (player) => !rankedPlayers.some((rankedPlayer) => rankedPlayer.id === player.id),
+    )
 
-    return loser ? [...winners, loser] : winners
+    return [...rankedPlayers, ...missingPlayers]
   }, [payload])
+
+  const statsLeaderboard = useMemo(() => {
+    if (!payload) {
+      return []
+    }
+
+    return payload.state.players
+      .map((player) => {
+        const fallbackInfo: PlayerCardInfo = {
+          playerName: player.name,
+          registeredAt: account.registeredAt,
+          gamesPlayed: account.gamesPlayed,
+          gamesWon: account.gamesWon,
+          gamesLost: account.gamesLost,
+          level: calcLevel(account.gamesPlayed),
+        }
+
+        const info = playerCardInfoCache[player.id] ?? (player.id === payload.yourPlayerId ? fallbackInfo : null)
+        if (!info) {
+          return null
+        }
+
+        const total = Math.max(1, info.gamesPlayed)
+        const winRate = Math.round((info.gamesWon / total) * 100)
+
+        return {
+          playerId: player.id,
+          playerName: info.playerName,
+          level: info.level,
+          gamesPlayed: info.gamesPlayed,
+          gamesWon: info.gamesWon,
+          gamesLost: info.gamesLost,
+          winRate,
+        }
+      })
+      .filter((row): row is NonNullable<typeof row> => Boolean(row))
+      .sort((left, right) => {
+        if (right.gamesWon !== left.gamesWon) {
+          return right.gamesWon - left.gamesWon
+        }
+        if (right.level !== left.level) {
+          return right.level - left.level
+        }
+        return right.gamesPlayed - left.gamesPlayed
+      })
+  }, [account.gamesLost, account.gamesPlayed, account.gamesWon, account.registeredAt, payload, playerCardInfoCache])
 
   function emitAck<TReq extends Record<string, unknown>>(
     event: string,
@@ -623,6 +828,52 @@ function App() {
       setAccount((response.account as PlayerAccountState) ?? createEmptyAccount())
     })
   }
+
+  const requestPlayerCardInfo = useCallback((playerId: string, showLoading = true) => {
+    if (!socket) return
+    if (showLoading) {
+      setLoadingCardInfoId(playerId)
+    }
+    socket.emit('get_player_card_info', { targetPlayerId: playerId }, (response: any) => {
+      if (showLoading) {
+        setLoadingCardInfoId(null)
+      }
+      if (response?.ok) {
+        setPlayerCardInfoCache((prev) => ({ ...prev, [playerId]: response as PlayerCardInfo }))
+      }
+    })
+  }, [socket])
+
+  const handleBadgeFlip = useCallback((playerId: string, event?: ReactMouseEvent<HTMLDivElement>) => {
+    event?.preventDefault()
+    event?.stopPropagation()
+
+    if (flippedBadgeId === playerId) {
+      setFlippedBadgeId(null)
+      return
+    }
+
+    setFlippedBadgeId(playerId)
+    if (!isUuid(playerId)) {
+      return
+    }
+    if (playerCardInfoCache[playerId]) {
+      return
+    }
+    requestPlayerCardInfo(playerId, true)
+  }, [flippedBadgeId, playerCardInfoCache, requestPlayerCardInfo])
+
+  useEffect(() => {
+    if (!payload || !socket) {
+      return
+    }
+
+    for (const player of payload.state.players) {
+      if (!playerCardInfoCache[player.id]) {
+        requestPlayerCardInfo(player.id, false)
+      }
+    }
+  }, [payload, playerCardInfoCache, requestPlayerCardInfo, socket])
 
   function refreshShopCatalog(): void {
     emitAck('get_shop_catalog', {}, (response) => {
@@ -653,13 +904,21 @@ function App() {
   }
 
   function createRoom(): void {
-    emitAck('create_room', { name: name || 'Player', profile: withSlot(profileDraft, activeProfileSlot) }, (response) => {
+    emitAck(
+      'create_room',
+      {
+        name: name || 'Player',
+        authUserId: getStoredAuthUserId(),
+        profile: withSlot(profileDraft, activeProfileSlot),
+      },
+      (response) => {
       setRoomCode(response.roomCode as string)
       setRoomCodeInput(response.roomCode as string)
       sessionStorage.setItem(playerStorageKey(String(response.roomCode)), String(response.playerId))
       refreshAccount()
       refreshShopCatalog()
-    })
+      },
+    )
   }
 
   function joinRoom(): void {
@@ -674,6 +933,7 @@ function App() {
       {
         roomCode: normalized,
         name: name || 'Player',
+        authUserId: getStoredAuthUserId(),
         existingPlayerId,
         profile: withSlot(profileDraft, activeProfileSlot),
       },
@@ -908,9 +1168,7 @@ function App() {
           <div className="penaltyBox">
             <h4>Fasiolas aktyvus: pasirink ne virsutine korta baudai</h4>
             <div className="actions">
-              {payload.yourHand
-                .slice(0, Math.max(payload.yourHand.length - 1, 0))
-                .map((card, idx) => (
+              {(payload.yourHand.length > 1 ? payload.yourHand.slice(0, payload.yourHand.length - 1) : payload.yourHand).map((card, idx) => (
                   <button key={`${card.rank}${card.suit}-${idx}`} onClick={() => emitAck('resolve_fasiolas', { cardIndex: idx })}>
                     {cardLabel(card)}
                   </button>
@@ -1043,43 +1301,389 @@ function App() {
     )
   }
 
-  function handleLogin(): void {
-    const username = loginUsername.trim()
+  function renderFlippableCard(
+    profile: PlayerProfile,
+    compact: boolean,
+    displayName: string | undefined,
+    playerId: string,
+  ) {
+    const isFlipped = flippedBadgeId === playerId
+    const isOwnCard = playerId === payload?.yourPlayerId || playerId === 'own'
+    const localInfo: PlayerCardInfo = {
+      playerName: displayName?.trim() || me?.name || name || 'Zaidejas',
+      registeredAt: account.registeredAt,
+      gamesPlayed: account.gamesPlayed,
+      gamesWon: account.gamesWon,
+      gamesLost: account.gamesLost,
+      level: calcLevel(account.gamesPlayed),
+    }
+    const info = playerCardInfoCache[playerId] ?? (isOwnCard ? localInfo : undefined)
+    const isLoading = loadingCardInfoId === playerId
+    const achievements = info ? buildPlayerAchievements(info) : []
+    const visibleAchievements = compact ? achievements.slice(0, 2) : achievements.slice(0, 3)
+    const unlockedAchievementClasses = achievements
+      .filter((achievement) => achievement.unlocked)
+      .map((achievement) => `has-achievement-${achievement.id}`)
+      .join(' ')
+    const isVip = (info?.level ?? 0) >= 20
+
+    const formatDate = (ts: number) => {
+      return new Date(ts).toLocaleDateString('lt-LT', { year: 'numeric', month: 'short', day: 'numeric' })
+    }
+
+    const applyTiltFromPoint = (element: HTMLDivElement, clientX: number, clientY: number) => {
+      const rect = element.getBoundingClientRect()
+      if (!rect.width || !rect.height) {
+        return
+      }
+
+      const x = (clientX - rect.left) / rect.width - 0.5
+      const y = (clientY - rect.top) / rect.height - 0.5
+      const tiltX = Number((-y * 10).toFixed(2))
+      const tiltY = Number((x * 12).toFixed(2))
+
+      element.style.setProperty('--tilt-x', `${tiltX}deg`)
+      element.style.setProperty('--tilt-y', `${tiltY}deg`)
+    }
+
+    const resetTilt = (element: HTMLDivElement) => {
+      element.style.setProperty('--tilt-x', '0deg')
+      element.style.setProperty('--tilt-y', '0deg')
+    }
+
+    const handleCardMouseMove = (event: ReactMouseEvent<HTMLDivElement>) => {
+      const element = event.currentTarget
+      applyTiltFromPoint(element, event.clientX, event.clientY)
+    }
+
+    const handleCardTouchMove = (event: ReactTouchEvent<HTMLDivElement>) => {
+      const element = event.currentTarget
+      const touch = event.touches[0]
+      if (!touch) {
+        return
+      }
+      applyTiltFromPoint(element, touch.clientX, touch.clientY)
+    }
+
+    const handleCardTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
+      const element = event.currentTarget
+      const touch = event.touches[0]
+      if (!touch) {
+        return
+      }
+      applyTiltFromPoint(element, touch.clientX, touch.clientY)
+    }
+
+    const handleCardMouseLeave = (event: ReactMouseEvent<HTMLDivElement>) => {
+      const element = event.currentTarget
+      resetTilt(element)
+    }
+
+    const handleCardTouchEnd = (event: ReactTouchEvent<HTMLDivElement>) => {
+      const element = event.currentTarget
+      resetTilt(element)
+    }
+
+    const effectClass = `effect-${profile.effectId}`
+    const vipClass = isVip ? 'vip-card' : ''
+    const flipCardClass = compact
+      ? (isFlipped
+        ? `flipCard compact flipped ${effectClass} ${vipClass} ${unlockedAchievementClasses}`
+        : `flipCard compact ${effectClass} ${vipClass} ${unlockedAchievementClasses}`)
+      : (isFlipped
+        ? `flipCard flipped ${effectClass} ${vipClass} ${unlockedAchievementClasses}`
+        : `flipCard ${effectClass} ${vipClass} ${unlockedAchievementClasses}`)
+
+    return (
+      <div
+        key={`flip-${playerId}`}
+        className={flipCardClass}
+        onClick={(event) => handleBadgeFlip(playerId, event)}
+        onMouseMove={handleCardMouseMove}
+        onMouseLeave={handleCardMouseLeave}
+        onTouchStart={handleCardTouchStart}
+        onTouchMove={handleCardTouchMove}
+        onTouchEnd={handleCardTouchEnd}
+        onTouchCancel={handleCardTouchEnd}
+        ref={isFlipped ? (el) => { (flipContainerRef as any).current = el } : null}
+      >
+        <div className="flipCardInner">
+          <div className="flipCardFront">
+            {renderProfileBadge(profile, compact, displayName)}
+          </div>
+          <div className="flipCardBack">
+            {isLoading ? (
+              <div className="cardBackLoading"><span className="cardBackSpinner" /></div>
+            ) : info ? (
+              <div className="cardBackContent">
+                <div className="cardBackTop">
+                  <div className="cardBackBrand" data-text="FASIOLAS" aria-label="Fasiolas brand">FASIOLAS</div>
+                </div>
+                <div className="cardBackBody">
+                  <div className="cardBackCoin" aria-label="Fasiolas coin">
+                    <span className="cardBackCoinCore">F</span>
+                  </div>
+                  <div className="cardBackTitle">{info.playerName}</div>
+                  <div className="cardBackLevel">
+                    <span className="cardBackLevelNum">Lv. {info.level}</span>
+                    <span className="cardBackLevelSub">Lygio intervalas: {(info.level - 1) * 5}–{info.level * 5 - 1} suzaista</span>
+                  </div>
+                  <div className="cardBackStats">
+                    <div className="cardBackStat">
+                      <span className="cardBackStatVal">{info.gamesPlayed}</span>
+                      <span className="cardBackStatLabel">Total</span>
+                    </div>
+                    <div className="cardBackStat win">
+                      <span className="cardBackStatVal">{info.gamesWon}</span>
+                      <span className="cardBackStatLabel">Laimeta game</span>
+                    </div>
+                    <div className="cardBackStat loss">
+                      <span className="cardBackStatVal">{info.gamesLost}</span>
+                      <span className="cardBackStatLabel">Pralaimeta game</span>
+                    </div>
+                  </div>
+                  <div className="cardBackAchievements" aria-label="Achievements">
+                    {visibleAchievements.map((achievement) => (
+                      <span
+                        key={achievement.id}
+                        className={achievement.unlocked
+                          ? `cardBackAchievement vip unlocked achievement-${achievement.id}`
+                          : `cardBackAchievement vip locked achievement-${achievement.id}`}
+                      >
+                        {achievement.title}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="cardBackFooter">
+                  <div className="cardBackEdition">VIP SPECIAL EDITION</div>
+                  {isVip ? <div className="cardBackVip">VIP LEVEL</div> : null}
+                  <div className="cardBackRegistered">Registracijos data: {formatDate(info.registeredAt)}</div>
+                </div>
+              </div>
+            ) : (
+              <div className="cardBackContent">
+                <div className="cardBackTop">
+                  <div className="cardBackBrand" data-text="FASIOLAS" aria-label="Fasiolas brand">FASIOLAS</div>
+                </div>
+                <div className="cardBackBody">
+                  <div className="cardBackCoin" aria-label="Fasiolas coin">
+                    <span className="cardBackCoinCore">F</span>
+                  </div>
+                  <div className="cardBackTitle">{displayName ?? 'Zaidejas'}</div>
+                  <div className="cardBackNoData">Duomenys nepasiekiami</div>
+                </div>
+                <div className="cardBackFooter">
+                  <div className="cardBackEdition">VIP SPECIAL EDITION</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  async function handleLogin(): Promise<void> {
+    const email = loginUsername.trim().toLowerCase()
     const password = loginPassword.trim()
     setLoginInfo('')
 
-    if (!username || !password) {
-      setLoginError('Ivesk varda ir slaptazodi')
+    if (!email || !password) {
+      setLoginError('Ivesk el. pasta ir slaptazodi')
       return
     }
 
-    setLoginError('')
-    sessionStorage.setItem(LOGIN_SESSION_STORAGE_KEY, '1')
-    setIsLoggedIn(true)
-    setName((current) => current || username)
+    try {
+      const response = await fetch(`${SERVER_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      const payload = (await response.json()) as {
+        ok: boolean
+        error?: string
+        email?: string
+        userId?: string
+        playerName?: string
+      }
+      if (!response.ok || !payload.ok) {
+        setLoginError(payload.error ?? 'Prisijungti nepavyko')
+        return
+      }
+
+      setLoginError('')
+      sessionStorage.setItem(LOGIN_SESSION_STORAGE_KEY, payload.email ?? email)
+      if (payload.userId) {
+        sessionStorage.setItem(AUTH_USER_ID_STORAGE_KEY, payload.userId)
+      }
+      setIsLoggedIn(true)
+      setName(payload.playerName?.trim() || displayNameFromEmail(payload.email ?? email))
+    } catch {
+      setLoginError('Serveris nepasiekiamas. Patikrink ar paleistas backend.')
+    }
   }
 
-  function handleRegister(): void {
-    const username = loginUsername.trim()
+  async function handleRegister(): Promise<void> {
+    const email = loginUsername.trim().toLowerCase()
     const password = loginPassword.trim()
+    const confirm = registerConfirmPassword.trim()
+    const playerName = registerPlayerName.trim()
 
-    if (!username || !password) {
+    if (!email || !password) {
       setLoginInfo('')
-      setLoginError('Ivesk varda ir slaptazodi registracijai')
+      setLoginError('Ivesk el. pasta ir slaptazodi registracijai')
+      return
+    }
+    if (password.length < 8) {
+      setLoginInfo('')
+      setLoginError('Slaptazodis turi buti bent 8 simboliu')
+      return
+    }
+    if (password !== confirm) {
+      setLoginInfo('')
+      setLoginError('Slaptazodziai nesutampa')
+      return
+    }
+    if (!playerName) {
+      setLoginInfo('')
+      setLoginError('Ivesk zaidimo varda')
       return
     }
 
-    const raw = localStorage.getItem(REGISTERED_USERS_STORAGE_KEY)
-    const users = raw ? (JSON.parse(raw) as string[]) : []
-    if (users.includes(username)) {
-      setLoginInfo('')
-      setLoginError('Toks vartotojas jau egzistuoja')
-      return
-    }
+    try {
+      const response = await fetch(`${SERVER_URL}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, playerName }),
+      })
+      const payload = (await response.json()) as {
+        ok: boolean
+        error?: string
+        message?: string
+        userId?: string
+        playerName?: string
+      }
 
-    localStorage.setItem(REGISTERED_USERS_STORAGE_KEY, JSON.stringify([...users, username]))
+      if (!response.ok || !payload.ok) {
+        setLoginInfo('')
+        setLoginError(payload.error ?? 'Registracija nepavyko')
+        return
+      }
+
+      setLoginError('')
+      if (payload.userId) {
+        sessionStorage.setItem(AUTH_USER_ID_STORAGE_KEY, payload.userId)
+      }
+      setLoginInfo(payload.message ?? 'Registracija sekminga. Dabar galite prisijungti.')
+      setName(payload.playerName?.trim() || playerName)
+      setAuthMode('login')
+    } catch {
+      setLoginInfo('')
+      setLoginError('Serveris nepasiekiamas. Patikrink ar paleistas backend.')
+    }
+  }
+
+  async function handleForgotPassword(): Promise<void> {
+    const email = loginUsername.trim().toLowerCase()
     setLoginError('')
-    setLoginInfo('Registracija sekminga. Dabar spausk Prisijungti.')
+    setLoginInfo('')
+
+    if (!email) {
+      setLoginError('Ivesk el. pasta')
+      return
+    }
+
+    try {
+      const response = await fetch(`${SERVER_URL}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const payload = (await response.json()) as {
+        ok: boolean
+        message?: string
+        error?: string
+        previewResetLink?: string
+      }
+
+      if (!response.ok || !payload.ok) {
+        setLoginError(payload.error ?? 'Nepavyko issiusti reset nuorodos')
+        return
+      }
+
+      setLoginInfo(
+        payload.previewResetLink
+          ? `${payload.message ?? ''} Reset nuoroda: ${payload.previewResetLink}`
+          : payload.message ?? 'Jei email egzistuoja, nuoroda issiusta.',
+      )
+    } catch {
+      setLoginError('Serveris nepasiekiamas. Patikrink ar paleistas backend.')
+    }
+  }
+
+  async function handleResetPassword(): Promise<void> {
+    const password = loginPassword.trim()
+    const confirm = confirmPassword.trim()
+
+    setLoginError('')
+    setLoginInfo('')
+
+    if (!resetToken) {
+      setLoginError('Nerastas reset tokenas')
+      return
+    }
+    if (password.length < 8) {
+      setLoginError('Slaptazodis turi buti bent 8 simboliu')
+      return
+    }
+    if (password !== confirm) {
+      setLoginError('Slaptazodziai nesutampa')
+      return
+    }
+
+    try {
+      const response = await fetch(`${SERVER_URL}/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: resetToken, password }),
+      })
+      const payload = (await response.json()) as { ok: boolean; error?: string; message?: string }
+      if (!response.ok || !payload.ok) {
+        setLoginError(payload.error ?? 'Nepavyko atnaujinti slaptazodzio')
+        return
+      }
+
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search)
+        params.delete(RESET_TOKEN_QUERY_KEY)
+        const nextQuery = params.toString()
+        const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}`
+        window.history.replaceState({}, '', nextUrl)
+      }
+
+      setResetToken('')
+      setConfirmPassword('')
+      setLoginPassword('')
+      setAuthMode('login')
+      setLoginInfo(payload.message ?? 'Slaptazodis pakeistas. Dabar galite prisijungti.')
+    } catch {
+      setLoginError('Serveris nepasiekiamas. Patikrink ar paleistas backend.')
+    }
+  }
+
+  function handleLogout(): void {
+    sessionStorage.removeItem(LOGIN_SESSION_STORAGE_KEY)
+    sessionStorage.removeItem(AUTH_USER_ID_STORAGE_KEY)
+    setIsLoggedIn(false)
+    setLoginPassword('')
+    setLoginError('')
+    setLoginInfo('')
+    setPayload(null)
+    setRoomCode('')
+    setRoomCodeInput('')
+    setShowTableWindow(false)
+    setShowProfileWindow(false)
   }
 
   if (!isLoggedIn) {
@@ -1087,29 +1691,112 @@ function App() {
       <div className="page">
         <section className="panel loginPanel">
           <h1>Prisijungimas</h1>
-          <p className="loginHint">Paprastas prisijungimas i Fasiolas zaidima</p>
+          <p className="loginHint">El. pastas naudojamas prisijungimui ir slaptazodzio atstatymui</p>
           <div className="row">
-            <label htmlFor="login-name">Vartotojas</label>
+            <label htmlFor="login-name">El. pastas</label>
             <input
               id="login-name"
               value={loginUsername}
               onChange={(event) => setLoginUsername(event.target.value)}
-              placeholder="Ivesk varda"
+              placeholder="Ivesk el. pasta"
             />
           </div>
-          <div className="row">
-            <label htmlFor="login-password">Slaptazodis</label>
-            <input
-              id="login-password"
-              type="password"
-              value={loginPassword}
-              onChange={(event) => setLoginPassword(event.target.value)}
-              placeholder="Ivesk slaptazodi"
-            />
-          </div>
+          {authMode !== 'forgot' ? (
+            <div className="row">
+              <label htmlFor="login-password">Slaptazodis</label>
+              <input
+                id="login-password"
+                type="password"
+                value={loginPassword}
+                onChange={(event) => setLoginPassword(event.target.value)}
+                placeholder={authMode === 'reset' ? 'Naujas slaptazodis' : 'Ivesk slaptazodi'}
+              />
+            </div>
+          ) : null}
+          {authMode === 'register' ? (
+            <>
+              <div className="row">
+                <label htmlFor="register-confirm-password">Pakartok slaptazodi</label>
+                <input
+                  id="register-confirm-password"
+                  type="password"
+                  value={registerConfirmPassword}
+                  onChange={(event) => setRegisterConfirmPassword(event.target.value)}
+                  placeholder="Pakartok slaptazodi"
+                />
+              </div>
+              <div className="row">
+                <label htmlFor="register-player-name">Zaidimo vardas</label>
+                <input
+                  id="register-player-name"
+                  value={registerPlayerName}
+                  onChange={(event) => setRegisterPlayerName(event.target.value)}
+                  placeholder="Ivesk zaidimo varda"
+                />
+              </div>
+            </>
+          ) : null}
+          {authMode === 'reset' ? (
+            <div className="row">
+              <label htmlFor="confirm-password">Pakartok slaptazodi</label>
+              <input
+                id="confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                placeholder="Pakartok slaptazodi"
+              />
+            </div>
+          ) : null}
           <div className="actions">
-            <button type="button" onClick={handleLogin}>Prisijungti</button>
-            <button type="button" onClick={handleRegister}>Registruotis</button>
+            {authMode === 'login' ? <button type="button" onClick={handleLogin}>Prisijungti</button> : null}
+            {authMode === 'register' ? <button type="button" onClick={handleRegister}>Registruotis</button> : null}
+            {authMode === 'forgot' ? <button type="button" onClick={handleForgotPassword}>Siusti reset nuoroda</button> : null}
+            {authMode === 'reset' ? <button type="button" onClick={handleResetPassword}>Atnaujinti slaptazodi</button> : null}
+
+            {authMode !== 'register' ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('register')
+                  setRegisterConfirmPassword('')
+                  setRegisterPlayerName('')
+                  setLoginInfo('')
+                  setLoginError('')
+                }}
+              >
+                Kurti paskyra
+              </button>
+            ) : null}
+            {authMode !== 'forgot' ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('forgot')
+                  setLoginPassword('')
+                  setConfirmPassword('')
+                  setLoginInfo('')
+                  setLoginError('')
+                }}
+              >
+                Pamirsau slaptazodi
+              </button>
+            ) : null}
+            {authMode !== 'login' ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('login')
+                  setRegisterConfirmPassword('')
+                  setRegisterPlayerName('')
+                  setConfirmPassword('')
+                  setLoginInfo('')
+                  setLoginError('')
+                }}
+              >
+                Grizti i prisijungima
+              </button>
+            ) : null}
           </div>
           {loginInfo ? <div className="success">{loginInfo}</div> : null}
           {loginError ? <div className="error">{loginError}</div> : null}
@@ -1121,8 +1808,13 @@ function App() {
   return (
     <div className="page">
       <header>
-        <h1>Fasiolas</h1>
-        <p>Kortu zaidimo prototipas</p>
+        <div className="headerRow">
+          <div>
+            <h1>Fasiolas</h1>
+            <p>Kortu zaidimo prototipas</p>
+          </div>
+          <button type="button" onClick={handleLogout}>Atsijungti</button>
+        </div>
       </header>
 
       <section className="panel">
@@ -1150,9 +1842,15 @@ function App() {
         <div className={`profileQuickPanel quick-effect-${profilePanelProfile.effectId}`}>
           <div className="profileQuickInfo">
             <strong>Profilio langelis</strong>
-            <span>Slotas {activeProfileSlot} | Taskai {account.points} | Zaidimai {account.gamesPlayed}</span>
+            <span>Slotas {activeProfileSlot} | Lv. {accountLevel} | W {account.gamesWon} / L {account.gamesLost} | Total {account.gamesPlayed}</span>
+            <div className="levelProgressWrap" aria-label="Lygio progresas">
+              <div className="levelProgressTrack">
+                <div className="levelProgressFill" style={{ width: `${Math.round(accountLevelProgress * 100)}%` }} />
+              </div>
+              <span className="levelProgressText">Iki kito lygio: {accountLevelGamesLeft} game</span>
+            </div>
           </div>
-          {renderProfileBadge(profilePanelProfile, true, name || me?.name)}
+          {renderFlippableCard(profilePanelProfile, true, name || me?.name, payload?.yourPlayerId ?? 'own')}
           <div className="actions">
             <button type="button" onClick={() => setShowProfileWindow(true)}>Atidaryti profilio langeli</button>
             <button type="button" onClick={saveProfile}>Issaugoti ir pritaikyti</button>
@@ -1304,7 +2002,7 @@ function App() {
                 <div className="shopPanel" aria-label="Shop panel">
                   <div className="shopPanelHeader">
                     <strong>Shop</strong>
-                    <span>Taskai: {account.points} | Zaidimai: {account.gamesPlayed}</span>
+                      <span>Taskai: {account.points} | Lygis: {accountLevel} | Total: {account.gamesPlayed}</span>
                   </div>
                   <p className="shopPanelHint">Kiekvienas match: +20 tasku visiems, Top3 bonusai: +20 / +10 / +5.</p>
 
@@ -1408,7 +2106,7 @@ function App() {
                   <strong>Atiduok korta fasiolui</strong>
                   <span>Pasirink ne virsutine korta</span>
                   <div className="fasiolasContributionButtons">
-                    {payload.yourHand.slice(0, Math.max(payload.yourHand.length - 1, 0)).map((card, idx) => (
+                    {(payload.yourHand.length > 1 ? payload.yourHand.slice(0, payload.yourHand.length - 1) : payload.yourHand).map((card, idx) => (
                       <button
                         key={`dock-contrib-${card.rank}${card.suit}-${idx}`}
                         type="button"
@@ -1423,8 +2121,66 @@ function App() {
                 </div>
               ) : null}
 
+              {payload.state.trumpSuit ? (
+                <div className="tableTrumpBadge" aria-label="Kozerio zenklas">
+                  <span className="tableTrumpBadgeLabel">Kozeris</span>
+                  <span className={`tableTrumpBadgeSuit ${cardColorClass(payload.state.trumpSuit)}`}>
+                    {suitSymbol(payload.state.trumpSuit)}
+                  </span>
+                </div>
+              ) : null}
+
+              {payload.state.phase === 'PLAYING' ? (
+                <div className="playingActionDock">
+                  <strong>2 dalis: zaidimas</strong>
+                  <div className="playingActionSortRow">
+                    <button
+                      type="button"
+                      className={playingHandSortMode === 'suit' ? 'playingSortButton active' : 'playingSortButton'}
+                      onClick={() => setPlayingHandSortMode('suit')}
+                    >
+                      Rikiuoti pagal zenkla
+                    </button>
+                    <button
+                      type="button"
+                      className={playingHandSortMode === 'rank' ? 'playingSortButton active' : 'playingSortButton'}
+                      onClick={() => setPlayingHandSortMode('rank')}
+                    >
+                      Rikiuoti pagal verte
+                    </button>
+                  </div>
+                  <div className="playingActionCards">
+                    {sortedPlayingHand.map(({ card, index }) => (
+                      <button
+                        key={`playing-dock-${card.rank}${card.suit}-${index}`}
+                        type="button"
+                        className="playingActionCardPick"
+                        disabled={!isMyTurn}
+                        onClick={() => sendAction({ type: 'PLAY_CARD', cardIndex: index })}
+                        title={`Zaisti ${cardLabel(card)}`}
+                      >
+                        {renderVisualCard(card, true)}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!isMyTurn}
+                    onClick={() => sendAction({ type: 'TAKE_OLDEST' })}
+                  >
+                    Paimti seniausia nuo stalo
+                  </button>
+                </div>
+              ) : null}
+
               <div
-                className={draggedCardIndex !== null && payload.state.phase === 'PLAYING' ? 'roundTableCenter dropTarget' : 'roundTableCenter'}
+                className={
+                  payload.state.phase === 'DEALING'
+                    ? 'roundTableCenter dealingCenter'
+                    : draggedCardIndex !== null && payload.state.phase === 'PLAYING'
+                      ? 'roundTableCenter dropTarget'
+                      : 'roundTableCenter'
+                }
                 onDragOver={allowDrop}
                 onDrop={handleCenterDrop}
               >
@@ -1448,6 +2204,16 @@ function App() {
                     <span className="deckHint">{deckStatusText}</span>
                   </button>
                 ) : null}
+
+                {payload.state.phase === 'PLAYING' ? (
+                  <div className="tableCenterStack" aria-label="Stalo kortos">
+                    {payload.state.tableStack.map((card, index) => (
+                      <div key={`center-stack-${card.rank}${card.suit}-${index}`} className="tableCenterStackCard">
+                        {renderVisualCard(card, true)}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               {tableSeats.map((seat) => (
@@ -1468,42 +2234,47 @@ function App() {
                   onClick={() => handleSeatClick(seat.id)}
                 >
                   <div className="seatIdentity">
-                    <div className="seatIdentityRow">
-                      {renderProfileBadge(seat.profile, true, seat.name)}
-                      {seat.topCard ? (
-                        <div
-                          draggable={
-                            seat.isMe &&
-                            isMyTurn &&
-                            payload.state.phase === 'DEALING' &&
-                            !payload.state.revealedDrawCard
-                          }
-                          className={
-                            seat.isMe &&
-                            isMyTurn &&
-                            payload.state.phase === 'DEALING' &&
-                            !payload.state.revealedDrawCard
-                              ? 'seatTopCard draggableCard'
-                              : 'seatTopCard'
-                          }
-                          onDragStart={() => {
-                            if (!seat.isMe) {
-                              return
-                            }
-                            const topIndex = payload.yourHand.length - 1
-                            if (topIndex >= 0) {
-                              handleHandCardDragStart(topIndex)
-                            }
-                          }}
-                          onDragEnd={handleHandCardDragEnd}
-                        >
-                          {renderVisualCard(seat.topCard, true)}
-                        </div>
-                      ) : (
-                        <span>Virsus: -</span>
-                      )}
+                    <div className={seat.isMe ? 'seatIdentityRow meSeatIdentityRow' : 'seatIdentityRow opponentSeatIdentityRow'}>
+                      {renderFlippableCard(seat.profile, true, seat.name, seat.id)}
+                      {payload.state.phase !== 'PLAYING'
+                        ? seat.topCard ? (
+                            <div
+                              draggable={
+                                seat.isMe &&
+                                isMyTurn &&
+                                payload.state.phase === 'DEALING' &&
+                                !payload.state.revealedDrawCard
+                              }
+                              className={
+                                seat.isMe &&
+                                isMyTurn &&
+                                payload.state.phase === 'DEALING' &&
+                                !payload.state.revealedDrawCard
+                                  ? seat.isMe
+                                    ? 'seatTopCard mySeatTopCard draggableCard'
+                                    : 'seatTopCard opponentTopCard draggableCard'
+                                  : seat.isMe
+                                    ? 'seatTopCard mySeatTopCard'
+                                    : 'seatTopCard opponentTopCard'
+                              }
+                              onDragStart={() => {
+                                if (!seat.isMe) {
+                                  return
+                                }
+                                const topIndex = payload.yourHand.length - 1
+                                if (topIndex >= 0) {
+                                  handleHandCardDragStart(topIndex)
+                                }
+                              }}
+                              onDragEnd={handleHandCardDragEnd}
+                            >
+                              {renderVisualCard(seat.topCard, true)}
+                            </div>
+                          ) : (
+                            <span>Virsus: -</span>
+                          )
+                        : null}
                     </div>
-                    <strong>{seat.name}</strong>
                   </div>
                   <span>Kortos: {seat.cardCount}</span>
                 </div>
@@ -1522,7 +2293,7 @@ function App() {
             <div>Eile: {payload.state.currentTurnPlayerId?.slice(0, 8) ?? '-'}</div>
             <div>Kozeris: {payload.state.trumpSuit ?? 'none'}</div>
             <div>Kalades viduryje: {payload.state.centerDeckCount}</div>
-            {me ? <div className="statusProfile">{renderProfileBadge(me.profile, true, me.name)}</div> : null}
+            {me ? <div className="statusProfile">{renderFlippableCard(me.profile, true, me.name, payload.yourPlayerId)}</div> : null}
           </section>
 
           <section className="panel">
@@ -1530,13 +2301,45 @@ function App() {
             <div className="players">
               {payload.state.players.map((p) => (
                 <article key={p.id} className={p.id === payload.yourPlayerId ? 'player me' : 'player'}>
-                  {renderProfileBadge(p.profile, true, p.name)}
+                  {renderFlippableCard(p.profile, true, p.name, p.id)}
                   <strong>{p.name}</strong>
                   <span>ID: {p.id.slice(0, 8)}</span>
                   <span>Kortos: {p.cardCount}</span>
                   <span>Virsus: {cardLabel(p.topCard)}</span>
                 </article>
               ))}
+            </div>
+          </section>
+
+          <section className="panel">
+            <h2>Zaideju statistika</h2>
+            <div className="statsTableWrap">
+              <table className="statsTable" aria-label="Zaideju statistikos lentele">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Zaidejas</th>
+                    <th>Lvl</th>
+                    <th>Laimeta</th>
+                    <th>Pralaimeta</th>
+                    <th>Total</th>
+                    <th>Win %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {statsLeaderboard.map((row, index) => (
+                    <tr key={`stat-row-${row.playerId}`} className={row.playerId === payload.yourPlayerId ? 'me' : ''}>
+                      <td>{index + 1}</td>
+                      <td>{row.playerName}</td>
+                      <td>{row.level}</td>
+                      <td>{row.gamesWon}</td>
+                      <td>{row.gamesLost}</td>
+                      <td>{row.gamesPlayed}</td>
+                      <td>{row.winRate}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </section>
 
@@ -1589,18 +2392,34 @@ function App() {
       ) : null}
 
       {me && payload?.state.phase === 'FINISHED' ? (
-        <section className="panel finish">
-          {payload.state.loserPlayerId === me.id ? <h2>Pralaimejai partija</h2> : <h2>Partija baigta</h2>}
-          <div className="finishGrid">
-            {finalStandings.map((player, index) => (
-              <article key={`finish-${player.id}`} className={index === 0 ? 'finishCard winner' : 'finishCard'}>
-                <div className="finishPlace">#{index + 1}</div>
-                {renderProfileBadge(player.profile, false, player.name)}
-                <strong>{player.name}</strong>
-                <span>{player.id.slice(0, 8)}</span>
-              </article>
-            ))}
-          </div>
+        <section className="resultsOverlay" role="dialog" aria-modal="true" aria-label="Zaidimo rezultatai">
+          <article className="resultsDialog">
+            <h2>{payload.state.loserPlayerId === me.id ? 'Pralaimejai partija' : 'Partija baigta'}</h2>
+            <p className="resultsSubtitle">Galutiniai zaidimo rezultatai</p>
+
+            <div className="resultsTableWrap">
+              <table className="resultsTable">
+                <thead>
+                  <tr>
+                    <th>Vieta</th>
+                    <th>Zaidejas</th>
+                    <th>Statusas</th>
+                    <th>Kortos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {finalStandings.map((player, index) => (
+                    <tr key={`result-${player.id}`} className={index === 0 ? 'winnerRow' : ''}>
+                      <td>#{index + 1}</td>
+                      <td>{player.name}</td>
+                      <td>{payload.state.loserPlayerId === player.id ? 'Pralaimejo' : 'Laimetojas'}</td>
+                      <td>{player.cardCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </article>
         </section>
       ) : null}
     </div>
