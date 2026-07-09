@@ -1925,7 +1925,7 @@ function App() {
   if (appStage === 'profileSetup') {
     return (
       <div className="page profileSetupPage">
-        <section className={`profileWindow panel profileSetupPanel window-effect-${profileDraft.effectId}`}>
+        <section className="profileWindow panel profileSetupPanel">
           <div className="profileWindowHeader profileSetupHeader">
             <div>
               <h1>Sukurk savo profili</h1>
@@ -2171,7 +2171,7 @@ function App() {
           </button>
         </div>
 
-        <div className={`profileQuickPanel quick-effect-${profilePanelProfile.effectId}`}>
+        <div className="profileQuickPanel">
           <div className="profileQuickInfo">
             <strong>Profilio langelis</strong>
             <span>Slotas {activeProfileSlot} | Taskai {account.points} | Zaidimai {account.gamesPlayed}</span>
@@ -2208,7 +2208,7 @@ function App() {
 
       {showProfileWindow ? (
         <section className="profileWindowOverlay" role="dialog" aria-modal="true" aria-label="Profilio langelis">
-          <article className={`profileWindow panel window-effect-${profileDraft.effectId}`}>
+          <article className="profileWindow panel">
             <div className="profileWindowHeader">
               <h2>Profilio langelis</h2>
               <button type="button" onClick={() => setShowProfileWindow(false)}>Uzdaryti</button>
@@ -2421,7 +2421,7 @@ function App() {
 
       {showMarketplaceWindow ? (
         <section className="profileWindowOverlay" role="dialog" aria-modal="true" aria-label="Marketplace">
-          <article className={`profileWindow panel marketplaceWindow window-effect-${profileDraft.effectId}`}>
+          <article className="profileWindow panel marketplaceWindow">
             <div className="profileWindowHeader">
               <h2>Marketplace</h2>
               <button type="button" onClick={() => setShowMarketplaceWindow(false)}>Uzdaryti</button>
