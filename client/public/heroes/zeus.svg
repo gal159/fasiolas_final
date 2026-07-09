@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 360">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#f4e7c9"/>
+      <stop offset="0.42" stop-color="#cfab73"/>
+      <stop offset="1" stop-color="#6a4a2a"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#fbe3a8"/>
+      <stop offset="1" stop-color="#c1832e"/>
+    </linearGradient>
+    <linearGradient id="cloth" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#d7d7e8"/>
+    </linearGradient>
+    <linearGradient id="cape" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#b72a2f"/>
+      <stop offset="1" stop-color="#6a1319"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="256" height="360" rx="28" fill="url(#bg)"/>
+  <rect x="8" y="8" width="240" height="344" rx="24" fill="none" stroke="#1d1e26" stroke-width="6"/>
+
+  <rect x="28" y="58" width="200" height="224" rx="18" fill="#d5a55e"/>
+  <rect x="40" y="72" width="176" height="198" rx="14" fill="#b8843f"/>
+  <path d="M28 282h200v18H28z" fill="#8a5d2f"/>
+  <path d="M36 90h26v170H36z" fill="url(#gold)"/>
+  <path d="M194 90h26v170h-26z" fill="url(#gold)"/>
+  <path d="M58 84l-10 16h20z" fill="#edc978"/>
+  <path d="M198 84l-10 16h20z" fill="#edc978"/>
+
+  <path d="M152 156c22 20 42 47 46 84h-34c-6-28-20-48-34-62z" fill="url(#cape)"/>
+
+  <circle cx="128" cy="122" r="34" fill="#edcfa8"/>
+  <path d="M94 118c5-18 19-30 34-30s29 12 34 30" fill="#f5f7ff"/>
+  <path d="M97 112c8-12 18-18 31-18s23 6 31 18" fill="#d8dbe9"/>
+  <ellipse cx="114" cy="123" rx="4" ry="5" fill="#26303b"/>
+  <ellipse cx="142" cy="123" rx="4" ry="5" fill="#26303b"/>
+  <path d="M128 124c7 0 8 12 0 17-8-5-7-17 0-17z" fill="#c99d6e"/>
+  <path d="M101 143c10 17 44 17 54 0v16c-8 15-20 24-27 29-7-5-19-14-27-29z" fill="#f6f8fc"/>
+
+  <path d="M112 88l8-12 8 12 10-13 10 13v8h-40z" fill="url(#gold)"/>
+
+  <path d="M84 156c30-14 58-14 88 0l-6 114H90z" fill="url(#cloth)"/>
+  <path d="M85 160c9 26 22 40 43 53 20-13 33-27 42-53" fill="#f2f2fb"/>
+
+  <rect x="206" y="80" width="7" height="210" rx="3" fill="#87909a"/>
+  <path d="M209 58l8 20h-6l-2-6-2 6h-6z" fill="#7ac7e8"/>
+  <path d="M221 58l8 20h-6l-2-6-2 6h-6z" fill="#7ac7e8"/>
+  <path d="M197 58l8 20h-6l-2-6-2 6h-6z" fill="#7ac7e8"/>
+
+  <path d="M54 170c6 9 11 19 14 30" stroke="#d6b07a" stroke-width="10" stroke-linecap="round"/>
+  <path d="M174 170c8 12 12 25 14 37" stroke="#d6b07a" stroke-width="10" stroke-linecap="round"/>
+</svg>

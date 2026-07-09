@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 360">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#e7cfac"/>
+      <stop offset="0.42" stop-color="#9b7247"/>
+      <stop offset="1" stop-color="#4c2e1d"/>
+    </linearGradient>
+    <linearGradient id="robe" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#a17447"/>
+      <stop offset="1" stop-color="#3d2518"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="360" rx="28" fill="url(#bg)"/>
+  <rect x="8" y="8" width="240" height="344" rx="24" fill="none" stroke="#1e1f26" stroke-width="6"/>
+  <circle cx="128" cy="126" r="44" fill="#dcc3a0"/>
+  <circle cx="128" cy="70" r="10" fill="#2c1d14"/>
+  <rect x="108" y="82" width="40" height="12" rx="6" fill="#3a261a"/>
+  <ellipse cx="110" cy="126" rx="6" ry="6" fill="#1f2530"/>
+  <ellipse cx="146" cy="126" rx="6" ry="6" fill="#1f2530"/>
+  <path d="M128 134c8 0 10 14 0 19-10-5-8-19 0-19z" fill="#b78f63"/>
+  <rect x="58" y="198" width="140" height="136" rx="20" fill="url(#robe)"/>
+  <path d="M72 214h112v14H72z" fill="#6f4a2f"/>
+</svg>

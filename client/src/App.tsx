@@ -30,8 +30,10 @@ const REGISTERED_USERS_STORAGE_KEY = 'fasiolas:registered-users'
 
 const AVATAR_LABELS: Record<PlayerProfile['avatarId'], string> = {
   zeus: 'Dzeusas',
-  wizard: 'Burtininkas',
-  pablo: 'Pablo',
+  warrior: 'Karys',
+  mage: 'Magas',
+  ronin: 'Roninas',
+  guardian: 'Sventoves sargas',
 }
 
 const HAT_LABELS: Record<PlayerProfile['hatId'], string> = {
@@ -61,34 +63,20 @@ const EFFECT_LABELS: Record<PlayerProfile['effectId'], string> = {
   trail: 'Sleifas',
 }
 
-const EFFECT_TIER_LABELS: Record<PlayerProfile['effectId'], string> = {
-  none: 'Common',
-  trail: 'Uncommon',
-  outline: 'Rare',
-  glow: 'Epic',
-  shadow: 'Legendary',
-  fire: 'Mythic',
-}
-
-const EFFECT_GAMES_REQUIRED: Record<PlayerProfile['effectId'], number> = {
-  none: 8,
-  trail: 28,
-  outline: 55,
-  glow: 110,
-  shadow: 180,
-  fire: 260,
-}
-
 const AVATAR_ELEMENT_LABELS: Record<PlayerProfile['avatarId'], string> = {
   zeus: 'Sky',
-  wizard: 'Arcane',
-  pablo: 'Chaos',
+  warrior: 'Steel',
+  mage: 'Arcane',
+  ronin: 'Wind',
+  guardian: 'Stone',
 }
 
 const AVATAR_THEME_LABELS: Record<PlayerProfile['avatarId'], string> = {
-  zeus: 'Thunder Empire',
-  wizard: 'Mystic Coven',
-  pablo: 'Golden Syndicate',
+  zeus: 'Olympus Court',
+  warrior: 'Arena Vanguard',
+  mage: 'Mystic Order',
+  ronin: 'Crimson Dojo',
+  guardian: 'Temple Ward',
 }
 
 const RARITY_LABELS: Record<RarityId, string> = {
@@ -98,6 +86,15 @@ const RARITY_LABELS: Record<RarityId, string> = {
   epic: 'Epic',
   legendary: 'Legendary',
   mythic: 'Mythic',
+}
+
+const RARITY_GAMES_REQUIRED: Record<RarityId, number> = {
+  common: 8,
+  uncommon: 28,
+  rare: 55,
+  epic: 110,
+  legendary: 180,
+  mythic: 260,
 }
 
 const SHOP_SECTION_ORDER: ShopItemType[] = ['effect', 'skin', 'hat', 'avatar']
@@ -117,11 +114,16 @@ const SHOP_ITEM_LABELS: Record<ShopItemType, Record<string, string>> = {
 }
 
 function createEmptyAccount(): PlayerAccountState {
+  const defaultAvatars = Array.from(new Set([
+    ...AVATAR_OPTIONS.filter((id) => AVATAR_RARITY[id] === 'common'),
+    'zeus' as const,
+  ]))
+
   return {
     points: 0,
     gamesPlayed: 0,
     unlocked: {
-      avatars: AVATAR_OPTIONS.filter((id) => AVATAR_RARITY[id] === 'common'),
+      avatars: defaultAvatars,
       hats: HAT_OPTIONS.filter((id) => HAT_RARITY[id] === 'common'),
       skins: SKIN_OPTIONS.filter((id) => SKIN_RARITY[id] === 'common'),
       effects: EFFECT_OPTIONS.filter((id) => EFFECT_RARITY[id] === 'common'),
@@ -185,33 +187,20 @@ function slotToRoman(slot: PlayerProfile['profileSlot']): string {
   return 'III'
 }
 
-function getProfilePower(profile: PlayerProfile): number {
-  const avatarIndex = AVATAR_OPTIONS.findIndex((item) => item === profile.avatarId)
-  const hatIndex = HAT_OPTIONS.findIndex((item) => item === profile.hatId)
-  const skinIndex = SKIN_OPTIONS.findIndex((item) => item === profile.skinId)
-  const effectIndex = EFFECT_OPTIONS.findIndex((item) => item === profile.effectId)
-  const slotIndex = PROFILE_SLOT_OPTIONS.findIndex((item) => item === profile.profileSlot)
-  const score =
-    2600 +
-    (avatarIndex + 1) * 780 +
-    (hatIndex + 1) * 180 +
-    (skinIndex + 1) * 135 +
-    (effectIndex + 1) * 320 +
-    (slotIndex + 1) * 210
-  return Math.min(9900, Math.max(2200, score))
-}
-
 function isPlayerProfile(value: unknown): value is PlayerProfile {
   if (!value || typeof value !== 'object') {
     return false
   }
 
   const record = value as Record<string, unknown>
+  const avatarId = record.avatarId as string
+  const avatarIsKnown = AVATAR_OPTIONS.includes(avatarId as PlayerProfile['avatarId']) || avatarId === 'wizard' || avatarId === 'pablo'
+
   return (
     typeof record.baseColor === 'string' &&
     PROFILE_COLOR_OPTIONS.includes(record.baseColor as PlayerProfile['baseColor']) &&
     typeof record.avatarId === 'string' &&
-    AVATAR_OPTIONS.includes(record.avatarId as PlayerProfile['avatarId']) &&
+    avatarIsKnown &&
     typeof record.hatId === 'string' &&
     HAT_OPTIONS.includes(record.hatId as PlayerProfile['hatId']) &&
     typeof record.skinId === 'string' &&
@@ -237,7 +226,7 @@ function loadStoredProfileSlots(): ProfileSlotMap {
     for (const slot of PROFILE_SLOT_OPTIONS) {
       const candidate = parsed[slot]
       if (isPlayerProfile(candidate)) {
-        resolved[slot] = withSlot(candidate, slot)
+        resolved[slot] = withSlot(normalizeLegacyProfile(candidate), slot)
       }
     }
 
@@ -254,17 +243,49 @@ function cardLabel(card: Card | null): string {
   return `${card.rank}${card.suit}`
 }
 
-function suitSymbol(suit: Card['suit']): string {
+function suitGlyphClass(suit: Card['suit']): string {
   if (suit === 'S') {
-    return '♠'
+    return 'spade'
   }
   if (suit === 'H') {
-    return '♥'
+    return 'heart'
   }
   if (suit === 'D') {
-    return '♦'
+    return 'diamond'
   }
-  return '♣'
+  return 'club'
+}
+
+function renderSuitGlyph(suit: Card['suit']) {
+  const glyphClass = suitGlyphClass(suit)
+  if (suit === 'S') {
+    return (
+      <svg className={`suitGlyph ${glyphClass}`} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12 2C9 6.2 4.2 8.6 4.2 13a4.5 4.5 0 0 0 7.8 3.1A4.5 4.5 0 0 0 19.8 13C19.8 8.6 15 6.2 12 2Z" />
+        <path d="M12 15.6L9.6 21h4.8l-2.4-5.4Z" />
+      </svg>
+    )
+  }
+  if (suit === 'H') {
+    return (
+      <svg className={`suitGlyph ${glyphClass}`} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12 21c-4.2-2.5-7.6-5.8-9.2-9A5.3 5.3 0 0 1 12 5.2 5.3 5.3 0 0 1 21.2 12c-1.6 3.2-5 6.5-9.2 9Z" />
+      </svg>
+    )
+  }
+  if (suit === 'D') {
+    return (
+      <svg className={`suitGlyph ${glyphClass}`} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12 2.6 20.2 12 12 21.4 3.8 12 12 2.6Z" />
+      </svg>
+    )
+  }
+  return (
+    <svg className={`suitGlyph ${glyphClass}`} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M7.3 16.6a3.8 3.8 0 0 1-3.8-3.8c0-2 1.3-3.4 2.8-4.7 1-.9 2-1.9 2.7-3.1.8 1.3 1.6 2.2 2.5 3.1.2.1.3.3.5.5.2-.2.3-.4.5-.5 1-.9 1.8-1.8 2.6-3.1.8 1.3 1.7 2.2 2.7 3.1 1.5 1.3 2.8 2.7 2.8 4.7a3.8 3.8 0 0 1-3.8 3.8 4 4 0 0 1-2.6-1A4.4 4.4 0 0 1 12 14a4.3 4.3 0 0 1-2 1.7 4 4 0 0 1-2.7 1Z" />
+      <path d="M12 15.6 9.9 21h4.2L12 15.6Z" />
+    </svg>
+  )
 }
 
 function cardColorClass(suit: Card['suit']): string {
@@ -272,6 +293,26 @@ function cardColorClass(suit: Card['suit']): string {
     return 'red'
   }
   return 'black'
+}
+
+function normalizeLegacyProfile(profile: PlayerProfile): PlayerProfile {
+  const avatarAliases: Record<string, PlayerProfile['avatarId']> = {
+    wizard: 'mage',
+    pablo: 'warrior',
+  }
+
+  const normalizedAvatar = avatarAliases[profile.avatarId] ?? profile.avatarId
+  if (AVATAR_OPTIONS.includes(normalizedAvatar as PlayerProfile['avatarId'])) {
+    return {
+      ...profile,
+      avatarId: normalizedAvatar as PlayerProfile['avatarId'],
+    }
+  }
+
+  return {
+    ...profile,
+    avatarId: 'zeus',
+  }
 }
 
 type Seat = {
@@ -779,9 +820,9 @@ function App() {
   function renderVisualCard(card: Card, compact = false) {
     return (
       <div className={compact ? `playingCard compact ${cardColorClass(card.suit)}` : `playingCard ${cardColorClass(card.suit)}`}>
-        <span className="corner top">{card.rank}{suitSymbol(card.suit)}</span>
-        <span className="centerSuit">{suitSymbol(card.suit)}</span>
-        <span className="corner bottom">{card.rank}{suitSymbol(card.suit)}</span>
+        <span className="corner top"><span>{card.rank}</span>{renderSuitGlyph(card.suit)}</span>
+        <span className="centerSuit">{renderSuitGlyph(card.suit)}</span>
+        <span className="corner bottom"><span>{card.rank}</span>{renderSuitGlyph(card.suit)}</span>
       </div>
     )
   }
@@ -907,11 +948,10 @@ function App() {
   }
 
   function renderProfileBadge(profile: PlayerProfile, compact = false, displayName?: string) {
-    const powerValue = getProfilePower(profile)
-    const unlockGames = EFFECT_GAMES_REQUIRED[profile.effectId]
-    const tierLabel = EFFECT_TIER_LABELS[profile.effectId]
-    const rarityId = EFFECT_RARITY[profile.effectId]
-    const rarityCost = RARITY_PRICES[rarityId]
+    const avatarRarity = AVATAR_RARITY[profile.avatarId]
+    const unlockGames = RARITY_GAMES_REQUIRED[avatarRarity]
+    const tierLabel = RARITY_LABELS[avatarRarity]
+    const rarityCost = RARITY_PRICES[avatarRarity]
     const style = {
       '--profile-accent': profile.baseColor,
       '--profile-accent-soft': hexToRgba(profile.baseColor, compact ? 0.2 : 0.28),
@@ -924,7 +964,7 @@ function App() {
     return (
       <div className={badgeClass} style={style}>
         <div className="profileCardHeader">
-          <span className={`profileCardTier tier-${profile.effectId}`}>{tierLabel}</span>
+          <span className={`profileCardTier tier-${profile.effectId} rarity-${avatarRarity}`}>{tierLabel}</span>
           <span className="profileCardSlot" role="note" aria-label={`Rarity ${tierLabel}, unlocked after ${unlockGames} played games`}>
             {slotToRoman(profile.profileSlot)}
             <span className="profileSlotTooltip">
@@ -948,7 +988,7 @@ function App() {
                   <span className="avatarLightningMark" />
                 </>
               ) : null}
-              {profile.avatarId === 'wizard' ? (
+              {profile.avatarId === 'mage' ? (
                 <>
                   <span className="avatarWizardHat" />
                   <span className="avatarCrownMark" />
@@ -956,13 +996,15 @@ function App() {
                   <span className="avatarWizardBeard" />
                 </>
               ) : null}
-              {profile.avatarId === 'pablo' ? (
+              {profile.avatarId === 'warrior' ? (
                 <>
-                  <span className="avatarPabloHat" />
-                  <span className="avatarPabloMoustache" />
-                  <span className="avatarPabloGlass" />
+                  <span className="avatarWarriorHelm" />
+                  <span className="avatarWarriorMask" />
+                  <span className="avatarWarriorCrest" />
                 </>
               ) : null}
+              {profile.avatarId === 'ronin' ? <span className="avatarRoninTopknot" /> : null}
+              {profile.avatarId === 'guardian' ? <span className="avatarGuardianMark" /> : null}
               <span className="avatarBrow left" />
               <span className="avatarBrow right" />
               <span className="miniEye left" />
@@ -983,16 +1025,12 @@ function App() {
               <span />
             </div>
           </div>
-          <div className={`profileCardPowerWrap rarity-${profile.effectId}`}>
-            <span className="profileCardPower">{powerValue.toLocaleString('lt-LT')}</span>
-            <span className="profileCardCoin">◉</span>
-          </div>
         </div>
 
-        <div className="profileCardName">{displayName?.trim() || AVATAR_LABELS[profile.avatarId]}</div>
+        <div className="profileCardName">{displayName?.trim() || 'Zaidejas'}</div>
 
         <div className="profileCardTags">
-          <span className="profileCardTag rarity">{tierLabel}</span>
+          <span className={`profileCardTag rarity rarity-${avatarRarity}`}>{tierLabel}</span>
           <span className="profileCardTag element">{AVATAR_ELEMENT_LABELS[profile.avatarId]}</span>
           <span className="profileCardTag theme">{AVATAR_THEME_LABELS[profile.avatarId]}</span>
         </div>
@@ -1175,7 +1213,7 @@ function App() {
 
                 <div className="customizationGrid">
                   <div className="row">
-                    <label htmlFor="avatar">Ikona</label>
+                    <label htmlFor="avatar">Veikejas</label>
                     <select
                       id="avatar"
                       value={profileDraft.avatarId}

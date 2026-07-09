@@ -20,7 +20,7 @@ export const PROFILE_COLOR_OPTIONS = [
   "#14b8a6",
 ] as const;
 
-export const AVATAR_OPTIONS = ["zeus", "wizard", "pablo"] as const;
+export const AVATAR_OPTIONS = ["zeus", "warrior", "mage", "ronin", "guardian"] as const;
 
 export const HAT_OPTIONS = ["none", "cowboy", "horns", "visor", "winter", "antenna"] as const;
 
@@ -55,9 +55,11 @@ export type ShopItemType = "avatar" | "hat" | "skin" | "effect";
 export type ShopItemId = AvatarId | HatId | SkinId | EffectId;
 
 export const AVATAR_RARITY: Record<AvatarId, RarityId> = {
-  zeus: "common",
-  wizard: "rare",
-  pablo: "epic",
+  zeus: "legendary",
+  warrior: "common",
+  mage: "common",
+  ronin: "common",
+  guardian: "rare",
 };
 
 export const HAT_RARITY: Record<HatId, RarityId> = {
