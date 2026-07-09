@@ -274,6 +274,62 @@ function cardColorClass(suit: Card['suit']): string {
   return 'black'
 }
 
+type PlayingHandSortMode = 'suit' | 'rank'
+
+type PlayingHandEntry = {
+  card: Card
+  index: number
+}
+
+const SUIT_SORT_ORDER: Record<Card['suit'], number> = {
+  C: 0,
+  D: 1,
+  H: 2,
+  S: 3,
+}
+
+const RANK_SORT_ORDER: Record<Card['rank'], number> = {
+  '2': 0,
+  '3': 1,
+  '4': 2,
+  '5': 3,
+  '6': 4,
+  '7': 5,
+  '8': 6,
+  '9': 7,
+  '10': 8,
+  J: 9,
+  Q: 10,
+  K: 11,
+  A: 12,
+}
+
+function sortPlayingHandEntries(entries: PlayingHandEntry[], mode: PlayingHandSortMode): PlayingHandEntry[] {
+  return [...entries].sort((left, right) => {
+    if (mode === 'suit') {
+      const bySuit = SUIT_SORT_ORDER[left.card.suit] - SUIT_SORT_ORDER[right.card.suit]
+      if (bySuit !== 0) {
+        return bySuit
+      }
+      const byRank = RANK_SORT_ORDER[left.card.rank] - RANK_SORT_ORDER[right.card.rank]
+      if (byRank !== 0) {
+        return byRank
+      }
+      return left.index - right.index
+    }
+
+    const byRank = RANK_SORT_ORDER[left.card.rank] - RANK_SORT_ORDER[right.card.rank]
+    if (byRank !== 0) {
+      return byRank
+    }
+    const bySuit = SUIT_SORT_ORDER[left.card.suit] - SUIT_SORT_ORDER[right.card.suit]
+    if (bySuit !== 0) {
+      return bySuit
+    }
+    return left.index - right.index
+  })
+}
+
 type Seat = {
   id: string
   name: string
@@ -321,6 +377,7 @@ function App() {
   const [showTableWindow, setShowTableWindow] = useState(false)
   const [showProfileWindow, setShowProfileWindow] = useState(false)
   const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null)
+  const [playingHandSortMode, setPlayingHandSortMode] = useState<PlayingHandSortMode>('suit')
 
   useEffect(() => {
     const s = io(SERVER_URL)
@@ -482,6 +539,14 @@ function App() {
   }, [payload])
 
   const showHandInCurrentPhase = visibleHandIndices.length > 0
+  const sortedPlayingHand = useMemo<PlayingHandEntry[]>(() => {
+    if (!payload) {
+      return []
+    }
+    const entries = payload.yourHand.map((card, index) => ({ card, index }))
+    return sortPlayingHandEntries(entries, playingHandSortMode)
+  }, [payload, playingHandSortMode])
+
   const canDrawFromCenterDeck = Boolean(
     payload &&
       isMyTurn &&
@@ -548,15 +613,15 @@ function App() {
       return []
     }
 
-    const winners = payload.state.winnerPlayerIds
+    const rankedPlayers = payload.state.finalRankingPlayerIds
       .map((id) => payload.state.players.find((player) => player.id === id))
       .filter((player): player is NonNullable<typeof player> => Boolean(player))
 
-    const loser = payload.state.loserPlayerId
-      ? payload.state.players.find((player) => player.id === payload.state.loserPlayerId) ?? null
-      : null
+    const missingPlayers = payload.state.players.filter(
+      (player) => !rankedPlayers.some((rankedPlayer) => rankedPlayer.id === player.id),
+    )
 
-    return loser ? [...winners, loser] : winners
+    return [...rankedPlayers, ...missingPlayers]
   }, [payload])
 
   function emitAck<TReq extends Record<string, unknown>>(
@@ -867,9 +932,7 @@ function App() {
           <div className="penaltyBox">
             <h4>Fasiolas aktyvus: pasirink ne virsutine korta baudai</h4>
             <div className="actions">
-              {payload.yourHand
-                .slice(0, Math.max(payload.yourHand.length - 1, 0))
-                .map((card, idx) => (
+              {(payload.yourHand.length > 1 ? payload.yourHand.slice(0, payload.yourHand.length - 1) : payload.yourHand).map((card, idx) => (
                   <button key={`${card.rank}${card.suit}-${idx}`} onClick={() => emitAck('resolve_fasiolas', { cardIndex: idx })}>
                     {cardLabel(card)}
                   </button>
@@ -1044,6 +1107,19 @@ function App() {
     setLoginInfo('Registracija sekminga. Dabar spausk Prisijungti.')
   }
 
+  function handleLogout(): void {
+    sessionStorage.removeItem(LOGIN_SESSION_STORAGE_KEY)
+    setIsLoggedIn(false)
+    setLoginPassword('')
+    setLoginError('')
+    setLoginInfo('')
+    setPayload(null)
+    setRoomCode('')
+    setRoomCodeInput('')
+    setShowTableWindow(false)
+    setShowProfileWindow(false)
+  }
+
   if (!isLoggedIn) {
     return (
       <div className="page">
@@ -1083,8 +1159,13 @@ function App() {
   return (
     <div className="page">
       <header>
-        <h1>Fasiolas</h1>
-        <p>Kortu zaidimo prototipas</p>
+        <div className="headerRow">
+          <div>
+            <h1>Fasiolas</h1>
+            <p>Kortu zaidimo prototipas</p>
+          </div>
+          <button type="button" onClick={handleLogout}>Atsijungti</button>
+        </div>
       </header>
 
       <section className="panel">
@@ -1370,7 +1451,7 @@ function App() {
                   <strong>Atiduok korta fasiolui</strong>
                   <span>Pasirink ne virsutine korta</span>
                   <div className="fasiolasContributionButtons">
-                    {payload.yourHand.slice(0, Math.max(payload.yourHand.length - 1, 0)).map((card, idx) => (
+                    {(payload.yourHand.length > 1 ? payload.yourHand.slice(0, payload.yourHand.length - 1) : payload.yourHand).map((card, idx) => (
                       <button
                         key={`dock-contrib-${card.rank}${card.suit}-${idx}`}
                         type="button"
@@ -1382,6 +1463,58 @@ function App() {
                       </button>
                     ))}
                   </div>
+                </div>
+              ) : null}
+
+              {payload.state.trumpSuit ? (
+                <div className="tableTrumpBadge" aria-label="Kozerio zenklas">
+                  <span className="tableTrumpBadgeLabel">Kozeris</span>
+                  <span className={`tableTrumpBadgeSuit ${cardColorClass(payload.state.trumpSuit)}`}>
+                    {suitSymbol(payload.state.trumpSuit)}
+                  </span>
+                </div>
+              ) : null}
+
+              {payload.state.phase === 'PLAYING' ? (
+                <div className="playingActionDock">
+                  <strong>2 dalis: zaidimas</strong>
+                  <div className="playingActionSortRow">
+                    <button
+                      type="button"
+                      className={playingHandSortMode === 'suit' ? 'playingSortButton active' : 'playingSortButton'}
+                      onClick={() => setPlayingHandSortMode('suit')}
+                    >
+                      Rikiuoti pagal zenkla
+                    </button>
+                    <button
+                      type="button"
+                      className={playingHandSortMode === 'rank' ? 'playingSortButton active' : 'playingSortButton'}
+                      onClick={() => setPlayingHandSortMode('rank')}
+                    >
+                      Rikiuoti pagal verte
+                    </button>
+                  </div>
+                  <div className="playingActionCards">
+                    {sortedPlayingHand.map(({ card, index }) => (
+                      <button
+                        key={`playing-dock-${card.rank}${card.suit}-${index}`}
+                        type="button"
+                        className="playingActionCardPick"
+                        disabled={!isMyTurn}
+                        onClick={() => sendAction({ type: 'PLAY_CARD', cardIndex: index })}
+                        title={`Zaisti ${cardLabel(card)}`}
+                      >
+                        {renderVisualCard(card, true)}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!isMyTurn}
+                    onClick={() => sendAction({ type: 'TAKE_OLDEST' })}
+                  >
+                    Paimti seniausia nuo stalo
+                  </button>
                 </div>
               ) : null}
 
@@ -1410,6 +1543,16 @@ function App() {
                     <span className="deckHint">{deckStatusText}</span>
                   </button>
                 ) : null}
+
+                {payload.state.phase === 'PLAYING' ? (
+                  <div className="tableCenterStack" aria-label="Stalo kortos">
+                    {payload.state.tableStack.map((card, index) => (
+                      <div key={`center-stack-${card.rank}${card.suit}-${index}`} className="tableCenterStackCard">
+                        {renderVisualCard(card, true)}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               {tableSeats.map((seat) => (
@@ -1430,42 +1573,47 @@ function App() {
                   onClick={() => handleSeatClick(seat.id)}
                 >
                   <div className="seatIdentity">
-                    <div className="seatIdentityRow">
+                    <div className={seat.isMe ? 'seatIdentityRow meSeatIdentityRow' : 'seatIdentityRow opponentSeatIdentityRow'}>
                       {renderProfileBadge(seat.profile, true, seat.name)}
-                      {seat.topCard ? (
-                        <div
-                          draggable={
-                            seat.isMe &&
-                            isMyTurn &&
-                            payload.state.phase === 'DEALING' &&
-                            !payload.state.revealedDrawCard
-                          }
-                          className={
-                            seat.isMe &&
-                            isMyTurn &&
-                            payload.state.phase === 'DEALING' &&
-                            !payload.state.revealedDrawCard
-                              ? 'seatTopCard draggableCard'
-                              : 'seatTopCard'
-                          }
-                          onDragStart={() => {
-                            if (!seat.isMe) {
-                              return
-                            }
-                            const topIndex = payload.yourHand.length - 1
-                            if (topIndex >= 0) {
-                              handleHandCardDragStart(topIndex)
-                            }
-                          }}
-                          onDragEnd={handleHandCardDragEnd}
-                        >
-                          {renderVisualCard(seat.topCard, true)}
-                        </div>
-                      ) : (
-                        <span>Virsus: -</span>
-                      )}
+                      {payload.state.phase !== 'PLAYING'
+                        ? seat.topCard ? (
+                            <div
+                              draggable={
+                                seat.isMe &&
+                                isMyTurn &&
+                                payload.state.phase === 'DEALING' &&
+                                !payload.state.revealedDrawCard
+                              }
+                              className={
+                                seat.isMe &&
+                                isMyTurn &&
+                                payload.state.phase === 'DEALING' &&
+                                !payload.state.revealedDrawCard
+                                  ? seat.isMe
+                                    ? 'seatTopCard mySeatTopCard draggableCard'
+                                    : 'seatTopCard opponentTopCard draggableCard'
+                                  : seat.isMe
+                                    ? 'seatTopCard mySeatTopCard'
+                                    : 'seatTopCard opponentTopCard'
+                              }
+                              onDragStart={() => {
+                                if (!seat.isMe) {
+                                  return
+                                }
+                                const topIndex = payload.yourHand.length - 1
+                                if (topIndex >= 0) {
+                                  handleHandCardDragStart(topIndex)
+                                }
+                              }}
+                              onDragEnd={handleHandCardDragEnd}
+                            >
+                              {renderVisualCard(seat.topCard, true)}
+                            </div>
+                          ) : (
+                            <span>Virsus: -</span>
+                          )
+                        : null}
                     </div>
-                    <strong>{seat.name}</strong>
                   </div>
                   <span>Kortos: {seat.cardCount}</span>
                 </div>
@@ -1551,18 +1699,34 @@ function App() {
       ) : null}
 
       {me && payload?.state.phase === 'FINISHED' ? (
-        <section className="panel finish">
-          {payload.state.loserPlayerId === me.id ? <h2>Pralaimejai partija</h2> : <h2>Partija baigta</h2>}
-          <div className="finishGrid">
-            {finalStandings.map((player, index) => (
-              <article key={`finish-${player.id}`} className={index === 0 ? 'finishCard winner' : 'finishCard'}>
-                <div className="finishPlace">#{index + 1}</div>
-                {renderProfileBadge(player.profile, false, player.name)}
-                <strong>{player.name}</strong>
-                <span>{player.id.slice(0, 8)}</span>
-              </article>
-            ))}
-          </div>
+        <section className="resultsOverlay" role="dialog" aria-modal="true" aria-label="Zaidimo rezultatai">
+          <article className="resultsDialog">
+            <h2>{payload.state.loserPlayerId === me.id ? 'Pralaimejai partija' : 'Partija baigta'}</h2>
+            <p className="resultsSubtitle">Galutiniai zaidimo rezultatai</p>
+
+            <div className="resultsTableWrap">
+              <table className="resultsTable">
+                <thead>
+                  <tr>
+                    <th>Vieta</th>
+                    <th>Zaidejas</th>
+                    <th>Statusas</th>
+                    <th>Kortos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {finalStandings.map((player, index) => (
+                    <tr key={`result-${player.id}`} className={index === 0 ? 'winnerRow' : ''}>
+                      <td>#{index + 1}</td>
+                      <td>{player.name}</td>
+                      <td>{payload.state.loserPlayerId === player.id ? 'Pralaimejo' : 'Laimetojas'}</td>
+                      <td>{player.cardCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </article>
         </section>
       ) : null}
     </div>

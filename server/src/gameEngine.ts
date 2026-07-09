@@ -552,8 +552,12 @@ export class GameEngine {
     }
 
     const requiredFromPlayerIds = room.players
-      .map((p) => p.id)
-      .filter((id) => id !== accusedPlayerId);
+      .filter((p) => p.id !== accusedPlayerId && p.cards.length > 1)
+      .map((p) => p.id);
+
+    if (requiredFromPlayerIds.length === 0) {
+      throw new Error("No players can contribute fasiolas card");
+    }
 
     room.pendingFasiolas = {
       accusedPlayerId,
@@ -598,7 +602,7 @@ export class GameEngine {
     }
 
     const isTopCardIndex = fromPlayer.cards.length - 1;
-    if (cardIndex === isTopCardIndex) {
+    if (cardIndex === isTopCardIndex && fromPlayer.cards.length > 1) {
       throw new Error("Must contribute a non-top card");
     }
 
@@ -622,6 +626,10 @@ export class GameEngine {
       room.pendingFasiolas = null;
       room.pendingFasiolasCards = new Map();
       room.dealerLog.push("Fasiolas resolved and penalty cards moved");
+
+      if (room.phase === "DEALING") {
+        this.tryTransitionToPlaying(room);
+      }
     }
   }
 
@@ -639,6 +647,13 @@ export class GameEngine {
     const viewer = room.players.find((p) => p.id === viewerPlayerId);
     if (!viewer) {
       throw new Error("Viewer not in room");
+    }
+
+    if (room.phase === "DEALING") {
+      this.reconcilePendingFasiolas(room);
+      if (room.pendingFasiolas === null) {
+        this.tryTransitionToPlaying(room);
+      }
     }
 
     return {
@@ -844,6 +859,46 @@ export class GameEngine {
     const starter = room.players.find((p) => p.cards.some((c) => c.suit === "S" && c.rank === "9"));
     room.currentTurnPlayerId = starter?.id ?? room.players[0]?.id ?? null;
     room.dealerLog.push("Moved to playing phase");
+  }
+
+  private reconcilePendingFasiolas(room: GameRoom): void {
+    const pending = room.pendingFasiolas;
+    if (!pending) {
+      return;
+    }
+
+    const validRequiredFromPlayerIds = pending.requiredFromPlayerIds.filter((playerId) => {
+      const contributor = room.players.find((p) => p.id === playerId);
+      return Boolean(contributor && contributor.cards.length > 0);
+    });
+
+    pending.requiredFromPlayerIds = validRequiredFromPlayerIds;
+    pending.contributedFromPlayerIds = pending.contributedFromPlayerIds.filter((playerId) =>
+      validRequiredFromPlayerIds.includes(playerId),
+    );
+
+    if (pending.contributedFromPlayerIds.length !== pending.requiredFromPlayerIds.length) {
+      return;
+    }
+
+    const accused = room.players.find((p) => p.id === pending.accusedPlayerId);
+    if (!accused) {
+      room.pendingFasiolas = null;
+      room.pendingFasiolasCards = new Map();
+      room.dealerLog.push("Fasiolas auto-cleared (accused not found)");
+      return;
+    }
+
+    for (const contributorId of pending.requiredFromPlayerIds) {
+      const contributedCard = room.pendingFasiolasCards.get(contributorId);
+      if (contributedCard) {
+        accused.cards.unshift(contributedCard);
+      }
+    }
+
+    room.pendingFasiolas = null;
+    room.pendingFasiolasCards = new Map();
+    room.dealerLog.push("Fasiolas auto-resolved");
   }
 
   private advanceTurn(room: GameRoom): void {

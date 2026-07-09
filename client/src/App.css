@@ -79,6 +79,13 @@ header p {
   opacity: 0.92;
 }
 
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .panel {
   background:
     radial-gradient(circle at 84% 12%, rgba(186, 228, 255, 0.22), transparent 40%),
@@ -2238,6 +2245,66 @@ button:disabled {
   color: #d8ecff;
 }
 
+.resultsOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 17, 33, 0.62);
+  display: grid;
+  place-items: center;
+  z-index: 120;
+  padding: 20px;
+}
+
+.resultsDialog {
+  width: min(760px, 96vw);
+  border: 1px solid rgba(150, 198, 236, 0.78);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(15, 42, 67, 0.98), rgba(9, 30, 51, 0.98));
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.44);
+  padding: 16px;
+}
+
+.resultsDialog h2 {
+  margin: 0;
+  text-align: center;
+}
+
+.resultsSubtitle {
+  margin: 6px 0 14px;
+  text-align: center;
+  color: #b9d7ef;
+}
+
+.resultsTableWrap {
+  overflow-x: auto;
+}
+
+.resultsTable {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 520px;
+}
+
+.resultsTable th,
+.resultsTable td {
+  border-bottom: 1px solid rgba(133, 176, 209, 0.38);
+  padding: 10px 8px;
+  text-align: left;
+}
+
+.resultsTable th {
+  color: #dff2ff;
+  font-size: 13px;
+}
+
+.resultsTable td {
+  color: #e7f4ff;
+}
+
+.resultsTable .winnerRow td {
+  background: rgba(242, 201, 95, 0.12);
+}
+
 .tableWindowOverlay {
   position: fixed;
   inset: 0;
@@ -2383,6 +2450,118 @@ button:disabled {
   color: #121d2d;
 }
 
+.fasiolasCardPick .playingCard.red .corner,
+.fasiolasCardPick .playingCard.red .centerSuit {
+  color: #b40f21 !important;
+  opacity: 1;
+}
+
+.fasiolasCardPick .playingCard.black .corner,
+.fasiolasCardPick .playingCard.black .centerSuit {
+  color: #121d2d !important;
+  opacity: 1;
+}
+
+.playingActionDock {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 8;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  background: rgba(18, 30, 46, 0.82);
+  border: 1px solid rgba(165, 208, 244, 0.72);
+  border-radius: 10px;
+  padding: 8px;
+  color: #dff1ff;
+  width: min(760px, 94vw);
+}
+
+.tableTrumpBadge {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 52px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(170, 210, 248, 0.6);
+  background: rgba(12, 22, 35, 0.82);
+  z-index: 7;
+}
+
+.tableTrumpBadgeLabel {
+  font-size: 10px;
+  line-height: 1;
+  color: rgba(226, 240, 254, 0.88);
+}
+
+.tableTrumpBadgeSuit {
+  font-size: 22px;
+  line-height: 1;
+  color: #f1f7ff;
+}
+
+.tableTrumpBadgeSuit.red {
+  color: #de2941;
+}
+
+.tableTrumpBadgeSuit.black {
+  color: #dbe8f6;
+}
+
+.playingActionCards {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  justify-items: center;
+  gap: 6px;
+  max-height: 188px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.playingActionSortRow {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.playingSortButton {
+  background: rgba(47, 78, 117, 0.86);
+  border: 1px solid rgba(170, 210, 248, 0.72);
+  color: #e5f3ff;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.playingSortButton.active {
+  background: rgba(84, 139, 207, 0.92);
+  border-color: rgba(220, 240, 255, 0.9);
+}
+
+.playingActionCardPick {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.playingActionCardPick:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: none;
+}
+
+.playingActionCardPick .playingCard.compact {
+  width: 58px;
+  height: 82px;
+}
+
 .roundTableCenter {
   position: absolute;
   left: 50%;
@@ -2405,6 +2584,27 @@ button:disabled {
 
 .roundTableCenter.dropTarget {
   box-shadow: 0 0 0 4px rgba(248, 227, 186, 0.52);
+}
+
+.tableCenterStack {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 110px;
+}
+
+.tableCenterStackCard {
+  margin-left: -34px;
+}
+
+.tableCenterStackCard:first-child {
+  margin-left: 0;
+}
+
+.tableCenterStackCard .playingCard.compact {
+  width: 70px;
+  height: 98px;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35);
 }
 
 .centerDeckWrap {
@@ -2480,64 +2680,76 @@ button:disabled {
 
 .deckCount {
   position: absolute;
-  left: 50%;
-  bottom: -16px;
-  transform: translateX(-50%);
+  left: calc(100% + 10px);
+  bottom: 18px;
+  transform: none;
   font-size: 11px;
   font-weight: 700;
+  color: rgba(245, 251, 255, 0.92);
+  text-align: left;
+  white-space: nowrap;
 }
 
 .deckHint {
   position: absolute;
-  left: 50%;
-  bottom: -32px;
-  transform: translateX(-50%);
+  left: calc(100% + 10px);
+  bottom: 2px;
+  transform: none;
   font-size: 10px;
   font-weight: 700;
   width: max-content;
-  max-width: 210px;
-  color: #244258;
+  max-width: 220px;
+  color: rgba(245, 251, 255, 0.84);
+  text-align: left;
 }
 
 .tableSeat {
   position: absolute;
   transform: translate(-50%, -50%);
   width: min(246px, 44vw);
-  border-radius: 12px;
-  border: 1px solid #6f8aa1;
-  background: rgba(16, 32, 44, 0.96);
+  border-radius: 0;
+  border: 0;
+  background: transparent;
   color: #ddecff;
-  padding: 7px;
+  padding: 0;
   display: grid;
-  gap: 4px;
+  gap: 0;
   justify-items: center;
   text-align: center;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
+  box-shadow: none;
   z-index: 2;
 }
 
 .tableSeat.me {
-  border: 2px solid #98bdd8;
-  background: rgba(18, 39, 54, 0.98);
+  border: 0;
+  background: transparent;
 }
 
 .tableSeat.dropTarget {
-  box-shadow: 0 0 0 3px rgba(255, 224, 170, 0.56), 0 8px 18px rgba(0, 0, 0, 0.24);
+  box-shadow: 0 0 0 3px rgba(255, 224, 170, 0.56);
 }
 
 .seatIdentity {
   display: grid;
   justify-items: center;
-  gap: 4px;
+  gap: 0;
+  overflow: visible;
 }
 
 .seatIdentityRow {
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 12px;
-  width: 100%;
+  position: relative;
+  display: grid;
+  justify-items: center;
+  width: max-content;
   overflow: visible;
+}
+
+.meSeatIdentityRow {
+  padding-top: 64px;
+}
+
+.opponentSeatIdentityRow {
+  padding-bottom: 64px;
 }
 
 .tableSeat .profileBadge.compact {
@@ -2545,7 +2757,7 @@ button:disabled {
   transform-origin: top center;
   margin-bottom: 0;
   position: relative;
-  z-index: 4;
+  z-index: 6;
 }
 
 .tableSeat strong {
@@ -2557,9 +2769,22 @@ button:disabled {
   border-radius: 10px;
   align-items: center;
   justify-content: center;
-  position: relative;
-  z-index: 7;
-  margin-top: 2px;
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  margin-top: 0;
+}
+
+.mySeatTopCard {
+  top: -12px;
+  bottom: auto;
+}
+
+.opponentTopCard {
+  top: auto;
+  bottom: 28px;
 }
 
 .seatTopCard .playingCard.compact {
@@ -2869,8 +3094,8 @@ button:disabled {
   }
 
   .seatTopCard .playingCard.compact {
-    width: 86px;
-    height: 122px;
+    width: 78px;
+    height: 110px;
   }
 
   .seatTopCard .playingCard.compact .centerSuit {
