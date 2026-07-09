@@ -6070,7 +6070,7 @@ header h1,
 
 .cardBackCoin {
   position: relative;
-  width: 72px;
+  width: 196px;
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -6078,7 +6078,7 @@ header h1,
   transform: none;
   position: absolute;
   left: 50%;
-  top: 48%;
+  top: 50%;
   translate: -50% -50%;
   z-index: 1;
   pointer-events: none;
@@ -6086,67 +6086,54 @@ header h1,
   background:
     repeating-conic-gradient(
       from 0deg,
-      rgba(255, 188, 188, 0.96) 0deg 8deg,
-      rgba(156, 12, 12, 0.98) 8deg 16deg
+      #b08a30 0deg 9deg,
+      #7b5e1f 9deg 18deg
     ),
-    radial-gradient(circle at 28% 26%, rgba(255, 243, 243, 0.96) 0%, rgba(255, 153, 153, 0.96) 18%, rgba(213, 42, 42, 0.98) 42%, rgba(121, 0, 0, 0.98) 72%, rgba(50, 0, 0, 1) 100%);
-  border: 5px solid rgba(255, 160, 160, 0.94);
+    radial-gradient(circle at 30% 24%, #ddbf73 0%, #b1893a 34%, #805f25 66%, #4f3813 100%);
+  border: 5px solid #6d5120;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 230, 230, 0.66),
-    inset 0 12px 18px rgba(255, 255, 255, 0.16),
-    inset 0 -16px 22px rgba(90, 0, 0, 0.42),
-    0 0 22px rgba(255, 64, 64, 0.56),
-    0 0 42px rgba(120, 0, 0, 0.32);
+    inset 0 0 0 1px rgba(226, 201, 136, 0.45),
+    inset 0 14px 20px rgba(246, 224, 164, 0.22),
+    inset 0 -16px 20px rgba(70, 49, 16, 0.52),
+    0 12px 20px rgba(28, 19, 8, 0.4);
 }
 
 .cardBackCoin::before,
 .cardBackCoin::after {
-  content: "";
+  content: none;
   position: absolute;
   border-radius: 50%;
   pointer-events: none;
 }
 
 .cardBackCoin::before {
-  inset: 12px;
+  inset: 0;
   background:
-    radial-gradient(circle at 30% 26%, rgba(255, 255, 255, 0.46), transparent 42%),
-    radial-gradient(circle, rgba(255, 236, 236, 0.98) 0%, rgba(255, 161, 161, 0.96) 40%, rgba(176, 28, 28, 0.96) 100%);
-  border: 2px solid rgba(255, 233, 233, 0.94);
-  box-shadow:
-    inset 0 0 0 2px rgba(255, 129, 129, 0.36),
-    inset 0 10px 16px rgba(255, 255, 255, 0.18),
-    inset 0 -12px 18px rgba(90, 0, 0, 0.32);
-  opacity: 0.99;
+    radial-gradient(circle at 30% 26%, rgba(255, 255, 255, 0.3), transparent 46%);
 }
 
 .cardBackCoin::after {
-  inset: -12px;
-  background:
-    radial-gradient(circle at center, rgba(255, 110, 110, 0.28), transparent 68%),
-    radial-gradient(circle at 50% 50%, rgba(255, 40, 40, 0.34), transparent 58%);
-  filter: blur(2px);
-  opacity: 0.72;
+  inset: 0;
+  background: none;
 }
 
 .flipCard.compact .cardBackCoin {
-  width: 62px;
+  width: 160px;
 }
 
 .cardBackCoinCore {
   font-family: "Knewave", "Sedgwick Ave Display", fantasy;
-  font-size: 29px;
+  font-size: 52px;
   line-height: 1;
-  color: #fff6f6;
+  color: #3d2a0d;
   text-shadow:
-    0 2px 0 rgba(120, 0, 0, 0.84),
-    0 0 12px rgba(255, 214, 214, 0.96),
-    0 0 28px rgba(255, 68, 68, 0.92);
+    0 2px 0 rgba(233, 206, 139, 0.55),
+    0 0 8px rgba(160, 120, 52, 0.35);
   transform: rotate(-2deg);
 }
 
 .flipCard.compact .cardBackCoinCore {
-  font-size: 23px;
+  font-size: 42px;
 }
 
 .cardBackTitle {
@@ -6542,8 +6529,8 @@ header h1,
 }
 
 .cardBackBody .cardBackCoin {
-  opacity: 0.82;
-  filter: saturate(1.1) brightness(0.98);
+  opacity: 1;
+  filter: none;
 }
 
 .cardBackBody .cardBackTitle,

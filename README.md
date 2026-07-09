@@ -66,6 +66,85 @@ Klientas paleidziamas ant Vite URL (pvz. http://localhost:5173)
 
 - Dabartiniame etape account/shop progresas laikomas serverio atmintyje (in-memory), todel po server restarto taskai ir pirkimai nusinulina.
 
+## Online hostinimas (Render + Vercel)
+
+Sis projektas padalintas i dvi dalis:
+- backend: `server` (Express + Socket.IO)
+- frontend: `client` (Vite)
+
+### 1) Backend i Render
+
+Repo jau turi `render.yaml` su paruosu service konfiguracija.
+
+Zingsniai:
+1. Push i GitHub.
+2. Render dashboard pasirink `New` -> `Blueprint` ir prijunk repo.
+3. Sukurus servisa nustatyk env kintamuosius:
+  - `APP_SECRET` (privalomas, ilgas random tekstas)
+  - `CLIENT_URL` (tavo frontend URL, pvz. `https://your-frontend-domain.vercel.app`)
+4. Deploy.
+
+Patikra:
+- atsidaryk `https://your-render-service-url/health`
+- turi grazinti `{ "ok": true }`
+
+### 2) Frontend i Vercel
+
+`client` aplanke jau pridetas `vercel.json`.
+
+Zingsniai:
+1. Vercel dashboard pasirink `Add New Project` ir prijunk ta pati repo.
+2. Root directory nustatyk i `client`.
+3. Environment Variables prideti:
+  - `VITE_SERVER_URL` = tavo Render backend URL (pvz. `https://your-render-service-url.onrender.com`)
+4. Deploy.
+
+### 3) CORS ir reset nuorodos
+
+Backend naudoja `CLIENT_URL` reset nuorodoms (`/auth/forgot-password`), todel po frontend domeno pakeitimo atnaujink `CLIENT_URL` Render aplinkoje.
+
+### 4) Greitas smoke test po deploy
+
+1. Prisiregistruoti / prisijungti.
+2. Sukurti kambari ir prisijungti is antro browser lango.
+3. Patikrinti, kad zaidimo state sinchronizuojasi realiu laiku.
+4. Patikrinti marketplace pirkima ir profilio issaugojima.
+
+## Railway alternatyva (backend)
+
+Backend aplanke prideti failai:
+- `server/Dockerfile`
+- `server/railway.toml`
+
+Zingsniai:
+1. Railway sukurk nauja projekta is GitHub repo.
+2. Root directory nustatyk i `server`.
+3. Railway panaudos Docker build (`Dockerfile`) ir paleis `npm run start`.
+4. Aplinkos kintamieji Railway:
+  - `APP_SECRET` (privalomas)
+  - `CLIENT_URL` (tavo frontend domenas)
+  - `PORT` (Railway duoda automatiskai)
+
+Pastaba:
+- Jei naudoji Railway backend, `client` aplinkoje `VITE_SERVER_URL` turi rodyti i Railway domena.
+
+## Automatinis deploy po push i main (GitHub Actions)
+
+Pridetas workflow failas:
+- `.github/workflows/deploy.yml`
+
+Ka jis daro:
+1. Po `push` i `main` (arba rankiniu budu per `workflow_dispatch`) iskviecia deploy hookus.
+2. Triggerina Render ir Vercel deploy, jei nustatyti GitHub secrets.
+
+Reikalingi GitHub repository secrets:
+1. `RENDER_DEPLOY_HOOK_URL`
+2. `VERCEL_DEPLOY_HOOK_URL`
+
+Kur gauti hook URL:
+1. Render -> tavo service -> Settings -> Deploy Hook
+2. Vercel -> Project Settings -> Deploy Hooks
+
 ## Pastaba
 
 Tai MVP implementacija: taisykliu validacija ir UX yra pradine versija, skirta greitam testavimui su draugais ir tolesniam iteravimui.

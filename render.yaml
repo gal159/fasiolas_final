@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: fasiolas-server
+    runtime: node
+    rootDir: server
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: APP_SECRET
+        sync: false
+      - key: CLIENT_URL
+        value: https://your-frontend-domain.vercel.app
+      - key: NODE_VERSION
+        value: 22
