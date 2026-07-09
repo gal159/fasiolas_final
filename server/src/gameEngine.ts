@@ -1,14 +1,40 @@
 import { randomUUID } from "node:crypto";
 import type {
+  AvatarId,
   Card,
   ClientStatePayload,
   DealingAction,
+  EffectId,
+  HatId,
+  PlayerAccountState,
+  PlayerUnlocks,
   PendingFasiolasState,
+  PlayerProfile,
+  ProfileColor,
+  ProfileSlot,
   PlayingAction,
   PublicTableState,
   Rank,
+  RarityId,
+  SkinId,
+  ShopCatalogItem,
+  ShopItemId,
+  ShopItemType,
   Suit,
   TurnAction,
+} from "../../shared/src/types";
+import {
+  AVATAR_OPTIONS,
+  AVATAR_RARITY,
+  EFFECT_OPTIONS,
+  EFFECT_RARITY,
+  HAT_OPTIONS,
+  HAT_RARITY,
+  PROFILE_COLOR_OPTIONS,
+  PROFILE_SLOT_OPTIONS,
+  RARITY_PRICES,
+  SKIN_OPTIONS,
+  SKIN_RARITY,
 } from "../../shared/src/types";
 
 type InternalPlayer = {
@@ -16,6 +42,7 @@ type InternalPlayer = {
   name: string;
   cards: Card[];
   socketId: string;
+  profile: PlayerProfile;
 };
 
 type LastActionRecord = {
@@ -64,6 +91,84 @@ const RANK_ORDER: Record<Rank, number> = {
   K: 13,
   A: 14,
 };
+
+const BASE_POINTS_PER_GAME = 20;
+const PLACEMENT_BONUS: Record<number, number> = {
+  1: 20,
+  2: 10,
+  3: 5,
+};
+
+function createDefaultProfile(seedIndex = 0): PlayerProfile {
+  return {
+    baseColor: PROFILE_COLOR_OPTIONS[seedIndex % PROFILE_COLOR_OPTIONS.length] as ProfileColor,
+    avatarId: "zeus",
+    hatId: "none",
+    skinId: "default",
+    effectId: "none",
+    profileSlot: PROFILE_SLOT_OPTIONS[seedIndex % PROFILE_SLOT_OPTIONS.length] as ProfileSlot,
+  };
+}
+
+function uniqueItems<T extends string>(values: T[]): T[] {
+  return [...new Set(values)];
+}
+
+function createDefaultUnlocks(): PlayerUnlocks {
+  return {
+    avatars: AVATAR_OPTIONS.filter((id) => AVATAR_RARITY[id] === "common") as AvatarId[],
+    hats: HAT_OPTIONS.filter((id) => HAT_RARITY[id] === "common") as HatId[],
+    skins: SKIN_OPTIONS.filter((id) => SKIN_RARITY[id] === "common") as SkinId[],
+    effects: EFFECT_OPTIONS.filter((id) => EFFECT_RARITY[id] === "common") as EffectId[],
+  };
+}
+
+function createDefaultAccountState(): PlayerAccountState {
+  return {
+    points: 0,
+    gamesPlayed: 0,
+    unlocked: createDefaultUnlocks(),
+  };
+}
+
+function cloneAccountState(account: PlayerAccountState): PlayerAccountState {
+  return {
+    points: account.points,
+    gamesPlayed: account.gamesPlayed,
+    unlocked: {
+      avatars: [...account.unlocked.avatars],
+      hats: [...account.unlocked.hats],
+      skins: [...account.unlocked.skins],
+      effects: [...account.unlocked.effects],
+    },
+  };
+}
+
+function resolveItemRarity(type: ShopItemType, itemId: ShopItemId): RarityId {
+  if (type === "avatar") {
+    return AVATAR_RARITY[itemId as AvatarId];
+  }
+  if (type === "hat") {
+    return HAT_RARITY[itemId as HatId];
+  }
+  if (type === "skin") {
+    return SKIN_RARITY[itemId as SkinId];
+  }
+  return EFFECT_RARITY[itemId as EffectId];
+}
+
+function isValidShopItem(type: ShopItemType, itemId: ShopItemId): boolean {
+  if (type === "avatar") {
+    return AVATAR_OPTIONS.includes(itemId as AvatarId);
+  }
+  if (type === "hat") {
+    return HAT_OPTIONS.includes(itemId as HatId);
+  }
+  if (type === "skin") {
+    return SKIN_OPTIONS.includes(itemId as SkinId);
+  }
+  return EFFECT_OPTIONS.includes(itemId as EffectId);
+}
 
 function nextRank(rank: Rank): Rank {
   const index = RANKS.indexOf(rank);
@@ -126,6 +231,7 @@ function canPlayOnTable(topTable: Card | null, candidate: Card, trumpSuit: Suit 
 
 export class GameEngine {
   private readonly rooms = new Map<string, GameRoom>();
+  private readonly playerAccounts = new Map<string, PlayerAccountState>();
 
   private recordLastAction(
     room: GameRoom,
@@ -199,12 +305,14 @@ export class GameEngine {
     }
   }
 
-  public createRoom(hostName: string, socketId: string): { roomCode: string; playerId: string } {
+  public createRoom(hostName: string, socketId: string, profile?: PlayerProfile): { roomCode: string; playerId: string } {
     const roomCode = Math.random().toString(36).slice(2, 8).toUpperCase();
     const playerId = randomUUID();
+    const playerProfile = profile ?? createDefaultProfile(0);
+    this.ensureAccount(playerId, playerProfile);
     this.rooms.set(roomCode, {
       code: roomCode,
-      players: [{ id: playerId, name: hostName, cards: [], socketId }],
+      players: [{ id: playerId, name: hostName, cards: [], socketId, profile: playerProfile }],
       phase: "LOBBY",
       centerDeck: [],
       revealedDrawCard: null,
@@ -223,7 +331,7 @@ export class GameEngine {
     return { roomCode, playerId };
   }
 
-  public joinRoom(roomCode: string, name: string, socketId: string): { playerId: string } {
+  public joinRoom(roomCode: string, name: string, socketId: string, profile?: PlayerProfile): { playerId: string } {
     const room = this.getRoomOrThrow(roomCode);
     if (room.players.length >= 8) {
       throw new Error("Room is full");
@@ -232,8 +340,76 @@ export class GameEngine {
       throw new Error("Game already started");
     }
     const playerId = randomUUID();
-    room.players.push({ id: playerId, name, cards: [], socketId });
+    const playerProfile = profile ?? createDefaultProfile(room.players.length);
+    this.ensureAccount(playerId, playerProfile);
+    room.players.push({ id: playerId, name, cards: [], socketId, profile: playerProfile });
     return { playerId };
+  }
+
+  public updateProfile(roomCode: string, playerId: string, profile: PlayerProfile): void {
+    const room = this.getRoomOrThrow(roomCode);
+    if (room.phase !== "LOBBY") {
+      throw new Error("Profile can be updated only in lobby");
+    }
+
+    const player = this.getPlayerOrThrow(room, playerId);
+    const account = this.getAccountOrThrow(playerId);
+    if (!this.canUseProfileItems(account, profile)) {
+      throw new Error("Profile contains locked items");
+    }
+    player.profile = profile;
+  }
+
+  public getAccountState(playerId: string): PlayerAccountState {
+    const account = this.getAccountOrThrow(playerId);
+    return cloneAccountState(account);
+  }
+
+  public getShopCatalog(): ShopCatalogItem[] {
+    const catalog: ShopCatalogItem[] = [];
+
+    for (const avatarId of AVATAR_OPTIONS) {
+      const rarity = AVATAR_RARITY[avatarId];
+      catalog.push({ type: "avatar", id: avatarId, rarity, cost: RARITY_PRICES[rarity] });
+    }
+
+    for (const hatId of HAT_OPTIONS) {
+      const rarity = HAT_RARITY[hatId];
+      catalog.push({ type: "hat", id: hatId, rarity, cost: RARITY_PRICES[rarity] });
+    }
+
+    for (const skinId of SKIN_OPTIONS) {
+      const rarity = SKIN_RARITY[skinId];
+      catalog.push({ type: "skin", id: skinId, rarity, cost: RARITY_PRICES[rarity] });
+    }
+
+    for (const effectId of EFFECT_OPTIONS) {
+      const rarity = EFFECT_RARITY[effectId];
+      catalog.push({ type: "effect", id: effectId, rarity, cost: RARITY_PRICES[rarity] });
+    }
+
+    return catalog;
+  }
+
+  public purchaseShopItem(playerId: string, type: ShopItemType, itemId: ShopItemId): PlayerAccountState {
+    if (!isValidShopItem(type, itemId)) {
+      throw new Error("Invalid shop item");
+    }
+
+    const account = this.getAccountOrThrow(playerId);
+    if (this.isItemUnlocked(account, type, itemId)) {
+      throw new Error("Item already owned");
+    }
+
+    const rarity = resolveItemRarity(type, itemId);
+    const cost = RARITY_PRICES[rarity];
+    if (account.points < cost) {
+      throw new Error("Not enough points");
+    }
+
+    account.points -= cost;
+    this.unlockItem(account, type, itemId);
+    return cloneAccountState(account);
   }
 
   public startGame(roomCode: string): void {
@@ -468,6 +644,7 @@ export class GameEngine {
     return {
       yourPlayerId: viewer.id,
       yourHand: [...viewer.cards],
+      account: cloneAccountState(this.getAccountOrThrow(viewer.id)),
       state: {
         phase: room.phase,
         roomCode: room.code,
@@ -477,6 +654,7 @@ export class GameEngine {
           name: p.name,
           cardCount: p.cards.length,
           topCard: p.cards[p.cards.length - 1] ?? null,
+          profile: p.profile,
         })),
         centerDeckCount: room.centerDeck.length,
         revealedDrawCard: room.revealedDrawCard,
@@ -650,6 +828,7 @@ export class GameEngine {
       room.finalRankingPlayerIds.push(room.loserPlayerId);
       room.dealerLog.push("Game finished with final standings");
       room.currentTurnPlayerId = null;
+      this.applyMatchRewards(room);
     }
   }
 
@@ -694,6 +873,84 @@ export class GameEngine {
     }
 
     room.currentTurnPlayerId = nextPlayerId;
+  }
+
+  private applyMatchRewards(room: GameRoom): void {
+    if (!room.loserPlayerId) {
+      return;
+    }
+
+    const standings = room.players
+      .map((player) => player.id)
+      .filter((playerId) => playerId !== room.loserPlayerId);
+    standings.push(room.loserPlayerId);
+
+    standings.forEach((playerId, index) => {
+      const account = this.getAccountOrThrow(playerId);
+      const placement = index + 1;
+      const reward = BASE_POINTS_PER_GAME + (PLACEMENT_BONUS[placement] ?? 0);
+      account.gamesPlayed += 1;
+      account.points += reward;
+    });
+  }
+
+  private ensureAccount(playerId: string, profile: PlayerProfile): void {
+    const account = this.playerAccounts.get(playerId) ?? createDefaultAccountState();
+    this.unlockProfileItems(account, profile);
+    this.playerAccounts.set(playerId, account);
+  }
+
+  private getAccountOrThrow(playerId: string): PlayerAccountState {
+    const account = this.playerAccounts.get(playerId);
+    if (!account) {
+      throw new Error("Account not found");
+    }
+    return account;
+  }
+
+  private canUseProfileItems(account: PlayerAccountState, profile: PlayerProfile): boolean {
+    return (
+      account.unlocked.avatars.includes(profile.avatarId) &&
+      account.unlocked.hats.includes(profile.hatId) &&
+      account.unlocked.skins.includes(profile.skinId) &&
+      account.unlocked.effects.includes(profile.effectId)
+    );
+  }
+
+  private unlockProfileItems(account: PlayerAccountState, profile: PlayerProfile): void {
+    account.unlocked.avatars = uniqueItems([...account.unlocked.avatars, profile.avatarId]);
+    account.unlocked.hats = uniqueItems([...account.unlocked.hats, profile.hatId]);
+    account.unlocked.skins = uniqueItems([...account.unlocked.skins, profile.skinId]);
+    account.unlocked.effects = uniqueItems([...account.unlocked.effects, profile.effectId]);
+  }
+
+  private isItemUnlocked(account: PlayerAccountState, type: ShopItemType, itemId: ShopItemId): boolean {
+    if (type === "avatar") {
+      return account.unlocked.avatars.includes(itemId as AvatarId);
+    }
+    if (type === "hat") {
+      return account.unlocked.hats.includes(itemId as HatId);
+    }
+    if (type === "skin") {
+      return account.unlocked.skins.includes(itemId as SkinId);
+    }
+    return account.unlocked.effects.includes(itemId as EffectId);
+  }
+
+  private unlockItem(account: PlayerAccountState, type: ShopItemType, itemId: ShopItemId): void {
+    if (type === "avatar") {
+      account.unlocked.avatars = uniqueItems([...account.unlocked.avatars, itemId as AvatarId]);
+      return;
+    }
+    if (type === "hat") {
+      account.unlocked.hats = uniqueItems([...account.unlocked.hats, itemId as HatId]);
+      return;
+    }
+    if (type === "skin") {
+      account.unlocked.skins = uniqueItems([...account.unlocked.skins, itemId as SkinId]);
+      return;
+    }
+    account.unlocked.effects = uniqueItems([...account.unlocked.effects, itemId as EffectId]);
   }
 
   private getRoomOrThrow(roomCode: string): GameRoom {

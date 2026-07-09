@@ -2226,19 +2226,28 @@ button:disabled {
 .tableWindowOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(16, 29, 25, 0.54);
+  background:
+    radial-gradient(circle at 12% 10%, rgba(123, 227, 255, 0.16), transparent 28%),
+    radial-gradient(circle at 84% 14%, rgba(255, 170, 225, 0.14), transparent 24%),
+    linear-gradient(180deg, #1a2a6d 0%, #16255f 48%, #121f4d 100%);
   display: grid;
   place-items: center;
   z-index: 50;
-  padding: 18px;
+  padding: 0;
 }
 
 .tableWindow {
-  width: min(1040px, 96vw);
-  min-height: min(88vh, 760px);
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
   display: grid;
   grid-template-rows: auto 1fr;
   gap: 12px;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  margin: 0;
 }
 
 .tableWindowHeader {
@@ -2261,7 +2270,8 @@ button:disabled {
 
 .roundTableArea {
   position: relative;
-  min-height: 580px;
+  min-height: 0;
+  height: 100%;
   border-radius: 16px;
   border: 1px solid #4b6c82;
   background: radial-gradient(circle at center, #1f6272 0%, #153f4c 58%, #112c37 100%);
@@ -2295,7 +2305,7 @@ button:disabled {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: min(240px, 36vw);
+  width: min(210px, 30vw);
   aspect-ratio: 1;
   border-radius: 999px;
   border: 2px solid #9bb9ce;
@@ -2306,8 +2316,8 @@ button:disabled {
   justify-items: center;
   gap: 6px;
   text-align: center;
-  padding: 16px;
-  z-index: 4;
+  padding: 12px;
+  z-index: 3;
 }
 
 .roundTableCenter.dropTarget {
@@ -2316,10 +2326,10 @@ button:disabled {
 
 .centerDeckWrap {
   border: 0;
-  margin-top: 8px;
+  margin-top: 6px;
   position: relative;
-  width: 96px;
-  height: 124px;
+  width: 84px;
+  height: 110px;
   background: transparent;
   padding: 0;
 }
@@ -2352,8 +2362,8 @@ button:disabled {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  width: 72px;
-  height: 102px;
+  width: 64px;
+  height: 90px;
 }
 
 .centerDeckWrap .deckShadow {
@@ -2388,35 +2398,35 @@ button:disabled {
 .deckCount {
   position: absolute;
   left: 50%;
-  bottom: -18px;
+  bottom: -16px;
   transform: translateX(-50%);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
 .deckHint {
   position: absolute;
   left: 50%;
-  bottom: -36px;
+  bottom: -32px;
   transform: translateX(-50%);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   width: max-content;
-  max-width: 240px;
+  max-width: 210px;
   color: #244258;
 }
 
 .tableSeat {
   position: absolute;
   transform: translate(-50%, -50%);
-  width: min(170px, 33vw);
+  width: min(150px, 28vw);
   border-radius: 12px;
   border: 1px solid #6f8aa1;
   background: rgba(16, 32, 44, 0.96);
   color: #ddecff;
-  padding: 9px;
+  padding: 7px;
   display: grid;
-  gap: 6px;
+  gap: 4px;
   justify-items: center;
   text-align: center;
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
@@ -2435,7 +2445,17 @@ button:disabled {
 .seatIdentity {
   display: grid;
   justify-items: center;
-  gap: 7px;
+  gap: 4px;
+}
+
+.tableSeat .profileBadge.compact {
+  transform: scale(0.76);
+  transform-origin: top center;
+  margin-bottom: -34px;
+}
+
+.tableSeat strong {
+  font-size: 15px;
 }
 
 .seatTopCard {
@@ -2713,16 +2733,28 @@ button:disabled {
   }
 
   .tableWindow {
-    min-height: 86vh;
+    height: 100vh;
+    min-height: 100vh;
+    gap: 8px;
   }
 
   .roundTableArea {
-    min-height: 72vh;
+    min-height: 0;
+    height: 100%;
+  }
+
+  .roundTableCenter {
+    width: min(196px, 56vw);
   }
 
   .tableSeat {
-    width: min(146px, 42vw);
-    padding: 8px;
+    width: min(136px, 40vw);
+    padding: 7px;
+  }
+
+  .tableSeat .profileBadge.compact {
+    transform: scale(0.7);
+    margin-bottom: -42px;
   }
 
   .profileMeta {
