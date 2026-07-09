@@ -91,6 +91,16 @@ header p {
   box-shadow: 0 10px 22px rgba(6, 10, 45, 0.42), inset 0 0 0 1px rgba(255, 245, 173, 0.18);
 }
 
+.loginPanel {
+  width: min(520px, 94vw);
+  margin: 10vh auto 0;
+}
+
+.loginHint {
+  margin-top: 0;
+  color: #cde8ff;
+}
+
 .status {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -2162,6 +2172,11 @@ button:disabled {
   margin-top: 8px;
 }
 
+.success {
+  color: #d5ffe3;
+  margin-top: 8px;
+}
+
 .log {
   margin: 0;
   padding-left: 20px;
@@ -2230,8 +2245,7 @@ button:disabled {
     radial-gradient(circle at 12% 10%, rgba(123, 227, 255, 0.16), transparent 28%),
     radial-gradient(circle at 84% 14%, rgba(255, 170, 225, 0.14), transparent 24%),
     linear-gradient(180deg, #1a2a6d 0%, #16255f 48%, #121f4d 100%);
-  display: grid;
-  place-items: center;
+  display: block;
   z-index: 50;
   padding: 0;
 }
@@ -2240,14 +2254,22 @@ button:disabled {
   width: 100vw;
   height: 100vh;
   min-height: 100vh;
-  display: grid;
-  grid-template-rows: auto 1fr;
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   border-radius: 0;
   border-left: 0;
   border-right: 0;
   border-top: 0;
   margin: 0;
+  box-sizing: border-box;
+}
+
+.tableWindow.panel {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .tableWindowHeader {
@@ -2255,6 +2277,7 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding: 12px 14px;
 }
 
 .tableWindowHeader h2 {
@@ -2272,7 +2295,8 @@ button:disabled {
   position: relative;
   min-height: 0;
   height: 100%;
-  border-radius: 16px;
+  flex: 1 1 auto;
+  border-radius: 0;
   border: 1px solid #4b6c82;
   background: radial-gradient(circle at center, #1f6272 0%, #153f4c 58%, #112c37 100%);
   overflow: hidden;
@@ -2300,23 +2324,82 @@ button:disabled {
   gap: 6px;
 }
 
+.fasiolasContributionDock {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 8;
+  display: grid;
+  gap: 6px;
+  background: rgba(18, 30, 46, 0.82);
+  border: 1px solid rgba(165, 208, 244, 0.72);
+  border-radius: 10px;
+  padding: 8px;
+  color: #dff1ff;
+  max-width: min(680px, 90vw);
+}
+
+.fasiolasContributionDock span {
+  font-size: 12px;
+  color: #c4e2fb;
+}
+
+.fasiolasContributionButtons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.fasiolasCardPick {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.fasiolasCardPick:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: none;
+}
+
+.fasiolasCardPick .playingCard.compact {
+  width: 64px;
+  height: 90px;
+}
+
+.fasiolasCardPick .playingCard {
+  background: #ffffff;
+  opacity: 1;
+  filter: none;
+}
+
+.fasiolasCardPick .playingCard.red {
+  color: #b40f21;
+}
+
+.fasiolasCardPick .playingCard.black {
+  color: #121d2d;
+}
+
 .roundTableCenter {
   position: absolute;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: min(210px, 30vw);
-  aspect-ratio: 1;
-  border-radius: 999px;
-  border: 2px solid #9bb9ce;
-  background: radial-gradient(circle at 30% 30%, #dceeff, #9cb7ca);
+  width: auto;
+  aspect-ratio: auto;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
   color: #163042;
   display: grid;
   align-content: center;
   justify-items: center;
   gap: 6px;
   text-align: center;
-  padding: 12px;
+  padding: 0;
   z-index: 3;
 }
 
@@ -2339,7 +2422,7 @@ button:disabled {
 }
 
 .centerDeckWrap.deckInactive {
-  opacity: 0.82;
+  opacity: 1;
 }
 
 .centerDeckWrap:disabled {
@@ -2419,7 +2502,7 @@ button:disabled {
 .tableSeat {
   position: absolute;
   transform: translate(-50%, -50%);
-  width: min(150px, 28vw);
+  width: min(246px, 44vw);
   border-radius: 12px;
   border: 1px solid #6f8aa1;
   background: rgba(16, 32, 44, 0.96);
@@ -2448,10 +2531,21 @@ button:disabled {
   gap: 4px;
 }
 
+.seatIdentityRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  overflow: visible;
+}
+
 .tableSeat .profileBadge.compact {
   transform: scale(0.76);
   transform-origin: top center;
-  margin-bottom: -34px;
+  margin-bottom: 0;
+  position: relative;
+  z-index: 4;
 }
 
 .tableSeat strong {
@@ -2461,6 +2555,24 @@ button:disabled {
 .seatTopCard {
   display: inline-flex;
   border-radius: 10px;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 7;
+  margin-top: 2px;
+}
+
+.seatTopCard .playingCard.compact {
+  width: 108px;
+  height: 152px;
+}
+
+.seatTopCard .playingCard.compact .centerSuit {
+  font-size: 40px;
+}
+
+.seatTopCard .playingCard.compact .corner {
+  font-size: 15px;
 }
 
 .draggableCard {
@@ -2735,7 +2847,7 @@ button:disabled {
   .tableWindow {
     height: 100vh;
     min-height: 100vh;
-    gap: 8px;
+    gap: 0;
   }
 
   .roundTableArea {
@@ -2748,8 +2860,21 @@ button:disabled {
   }
 
   .tableSeat {
-    width: min(136px, 40vw);
+    width: min(212px, 74vw);
     padding: 7px;
+  }
+
+  .seatIdentityRow {
+    gap: 6px;
+  }
+
+  .seatTopCard .playingCard.compact {
+    width: 86px;
+    height: 122px;
+  }
+
+  .seatTopCard .playingCard.compact .centerSuit {
+    font-size: 32px;
   }
 
   .tableSeat .profileBadge.compact {

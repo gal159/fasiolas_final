@@ -25,6 +25,8 @@ import './App.css'
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 const PROFILE_SLOTS_STORAGE_KEY = 'fasiolas:profile-slots'
+const LOGIN_SESSION_STORAGE_KEY = 'fasiolas:logged-in'
+const REGISTERED_USERS_STORAGE_KEY = 'fasiolas:registered-users'
 
 const AVATAR_LABELS: Record<PlayerProfile['avatarId'], string> = {
   zeus: 'Dzeusas',
@@ -285,19 +287,24 @@ type Seat = {
 
 function getRingRadiusPercent(playerCount: number): { x: number; y: number } {
   if (playerCount <= 2) {
-    return { x: 42, y: 33 }
+    return { x: 40, y: 30 }
   }
   if (playerCount === 3) {
-    return { x: 43, y: 34 }
+    return { x: 43, y: 32 }
   }
   if (playerCount === 4) {
-    return { x: 44, y: 35 }
+    return { x: 44, y: 33 }
   }
-  return { x: 45, y: 36 }
+  return { x: 45, y: 34 }
 }
 
 function App() {
   const initialSlots = useMemo(() => loadStoredProfileSlots(), [])
+  const [isLoggedIn, setIsLoggedIn] = useState(() => sessionStorage.getItem(LOGIN_SESSION_STORAGE_KEY) === '1')
+  const [loginUsername, setLoginUsername] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
+  const [loginError, setLoginError] = useState('')
+  const [loginInfo, setLoginInfo] = useState('')
   const [socket, setSocket] = useState<Socket | null>(null)
   const [name, setName] = useState('')
   const [roomCodeInput, setRoomCodeInput] = useState('')
@@ -899,7 +906,7 @@ function App() {
     )
   }
 
-  function renderProfileBadge(profile: PlayerProfile, compact = false) {
+  function renderProfileBadge(profile: PlayerProfile, compact = false, displayName?: string) {
     const powerValue = getProfilePower(profile)
     const unlockGames = EFFECT_GAMES_REQUIRED[profile.effectId]
     const tierLabel = EFFECT_TIER_LABELS[profile.effectId]
@@ -982,7 +989,7 @@ function App() {
           </div>
         </div>
 
-        <div className="profileCardName">{AVATAR_LABELS[profile.avatarId]}</div>
+        <div className="profileCardName">{displayName?.trim() || AVATAR_LABELS[profile.avatarId]}</div>
 
         <div className="profileCardTags">
           <span className="profileCardTag rarity">{tierLabel}</span>
@@ -994,6 +1001,81 @@ function App() {
           <span>{HAT_LABELS[profile.hatId]}</span>
           <span>{SKIN_LABELS[profile.skinId]}</span>
         </div>
+      </div>
+    )
+  }
+
+  function handleLogin(): void {
+    const username = loginUsername.trim()
+    const password = loginPassword.trim()
+    setLoginInfo('')
+
+    if (!username || !password) {
+      setLoginError('Ivesk varda ir slaptazodi')
+      return
+    }
+
+    setLoginError('')
+    sessionStorage.setItem(LOGIN_SESSION_STORAGE_KEY, '1')
+    setIsLoggedIn(true)
+    setName((current) => current || username)
+  }
+
+  function handleRegister(): void {
+    const username = loginUsername.trim()
+    const password = loginPassword.trim()
+
+    if (!username || !password) {
+      setLoginInfo('')
+      setLoginError('Ivesk varda ir slaptazodi registracijai')
+      return
+    }
+
+    const raw = localStorage.getItem(REGISTERED_USERS_STORAGE_KEY)
+    const users = raw ? (JSON.parse(raw) as string[]) : []
+    if (users.includes(username)) {
+      setLoginInfo('')
+      setLoginError('Toks vartotojas jau egzistuoja')
+      return
+    }
+
+    localStorage.setItem(REGISTERED_USERS_STORAGE_KEY, JSON.stringify([...users, username]))
+    setLoginError('')
+    setLoginInfo('Registracija sekminga. Dabar spausk Prisijungti.')
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <div className="page">
+        <section className="panel loginPanel">
+          <h1>Prisijungimas</h1>
+          <p className="loginHint">Paprastas prisijungimas i Fasiolas zaidima</p>
+          <div className="row">
+            <label htmlFor="login-name">Vartotojas</label>
+            <input
+              id="login-name"
+              value={loginUsername}
+              onChange={(event) => setLoginUsername(event.target.value)}
+              placeholder="Ivesk varda"
+            />
+          </div>
+          <div className="row">
+            <label htmlFor="login-password">Slaptazodis</label>
+            <input
+              id="login-password"
+              type="password"
+              value={loginPassword}
+              onChange={(event) => setLoginPassword(event.target.value)}
+              placeholder="Ivesk slaptazodi"
+            />
+          </div>
+          <div className="actions">
+            <button type="button" onClick={handleLogin}>Prisijungti</button>
+            <button type="button" onClick={handleRegister}>Registruotis</button>
+          </div>
+          {loginInfo ? <div className="success">{loginInfo}</div> : null}
+          {loginError ? <div className="error">{loginError}</div> : null}
+        </section>
       </div>
     )
   }
@@ -1032,7 +1114,7 @@ function App() {
             <strong>Profilio langelis</strong>
             <span>Slotas {activeProfileSlot} | Taskai {account.points} | Zaidimai {account.gamesPlayed}</span>
           </div>
-          {renderProfileBadge(profilePanelProfile, true)}
+          {renderProfileBadge(profilePanelProfile, true, name || me?.name)}
           <div className="actions">
             <button type="button" onClick={() => setShowProfileWindow(true)}>Atidaryti profilio langeli</button>
             <button type="button" onClick={saveProfile}>Issaugoti ir pritaikyti</button>
@@ -1071,7 +1153,7 @@ function App() {
 
             <div className="profileWindowBody">
               <div className="loadoutStage">
-                {renderProfileBadge(profileDraft)}
+                {renderProfileBadge(profileDraft, false, name || me?.name)}
                 <p>Siame lange kuriamas tavo veikejo stilius ir issaugomas i pasirinkta lizda.</p>
               </div>
 
@@ -1281,14 +1363,33 @@ function App() {
                 </div>
               ) : null}
 
+              {payload.state.pendingFasiolas &&
+              payload.state.pendingFasiolas.requiredFromPlayerIds.includes(payload.yourPlayerId) &&
+              !payload.state.pendingFasiolas.contributedFromPlayerIds.includes(payload.yourPlayerId) ? (
+                <div className="fasiolasContributionDock">
+                  <strong>Atiduok korta fasiolui</strong>
+                  <span>Pasirink ne virsutine korta</span>
+                  <div className="fasiolasContributionButtons">
+                    {payload.yourHand.slice(0, Math.max(payload.yourHand.length - 1, 0)).map((card, idx) => (
+                      <button
+                        key={`dock-contrib-${card.rank}${card.suit}-${idx}`}
+                        type="button"
+                        className="fasiolasCardPick"
+                        onClick={() => emitAck('resolve_fasiolas', { cardIndex: idx })}
+                        title={`Atiduoti ${cardLabel(card)}`}
+                      >
+                        {renderVisualCard(card, true)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               <div
                 className={draggedCardIndex !== null && payload.state.phase === 'PLAYING' ? 'roundTableCenter dropTarget' : 'roundTableCenter'}
                 onDragOver={allowDrop}
                 onDrop={handleCenterDrop}
               >
-                <strong>Stalas</strong>
-                <span>Faze: {payload.state.phase}</span>
-                <span>Stalo kortos: {payload.state.tableStack.length}</span>
                 {payload.state.phase === 'DEALING' ? (
                   <button
                     type="button"
@@ -1328,77 +1429,45 @@ function App() {
                   onDrop={() => handleSeatDrop(seat.id)}
                   onClick={() => handleSeatClick(seat.id)}
                 >
-                  {seat.isMe && seat.topCard ? (
-                    <div
-                      draggable={
-                        seat.isMe &&
-                        isMyTurn &&
-                        payload.state.phase === 'DEALING' &&
-                        !payload.state.revealedDrawCard
-                      }
-                      className={
-                        seat.isMe &&
-                        isMyTurn &&
-                        payload.state.phase === 'DEALING' &&
-                        !payload.state.revealedDrawCard
-                          ? 'seatTopCard draggableCard'
-                          : 'seatTopCard'
-                      }
-                      onDragStart={() => {
-                        if (!seat.isMe) {
-                          return
-                        }
-                        const topIndex = payload.yourHand.length - 1
-                        if (topIndex >= 0) {
-                          handleHandCardDragStart(topIndex)
-                        }
-                      }}
-                      onDragEnd={handleHandCardDragEnd}
-                    >
-                      {renderVisualCard(seat.topCard, true)}
-                    </div>
-                  ) : seat.isMe ? (
-                    <span>Virsus: -</span>
-                  ) : null}
-
                   <div className="seatIdentity">
-                    {renderProfileBadge(seat.profile, true)}
+                    <div className="seatIdentityRow">
+                      {renderProfileBadge(seat.profile, true, seat.name)}
+                      {seat.topCard ? (
+                        <div
+                          draggable={
+                            seat.isMe &&
+                            isMyTurn &&
+                            payload.state.phase === 'DEALING' &&
+                            !payload.state.revealedDrawCard
+                          }
+                          className={
+                            seat.isMe &&
+                            isMyTurn &&
+                            payload.state.phase === 'DEALING' &&
+                            !payload.state.revealedDrawCard
+                              ? 'seatTopCard draggableCard'
+                              : 'seatTopCard'
+                          }
+                          onDragStart={() => {
+                            if (!seat.isMe) {
+                              return
+                            }
+                            const topIndex = payload.yourHand.length - 1
+                            if (topIndex >= 0) {
+                              handleHandCardDragStart(topIndex)
+                            }
+                          }}
+                          onDragEnd={handleHandCardDragEnd}
+                        >
+                          {renderVisualCard(seat.topCard, true)}
+                        </div>
+                      ) : (
+                        <span>Virsus: -</span>
+                      )}
+                    </div>
                     <strong>{seat.name}</strong>
                   </div>
                   <span>Kortos: {seat.cardCount}</span>
-
-                  {!seat.isMe && seat.topCard ? (
-                    <div
-                      draggable={
-                        seat.isMe &&
-                        isMyTurn &&
-                        payload.state.phase === 'DEALING' &&
-                        !payload.state.revealedDrawCard
-                      }
-                      className={
-                        seat.isMe &&
-                        isMyTurn &&
-                        payload.state.phase === 'DEALING' &&
-                        !payload.state.revealedDrawCard
-                          ? 'seatTopCard draggableCard'
-                          : 'seatTopCard'
-                      }
-                      onDragStart={() => {
-                        if (!seat.isMe) {
-                          return
-                        }
-                        const topIndex = payload.yourHand.length - 1
-                        if (topIndex >= 0) {
-                          handleHandCardDragStart(topIndex)
-                        }
-                      }}
-                      onDragEnd={handleHandCardDragEnd}
-                    >
-                      {renderVisualCard(seat.topCard, true)}
-                    </div>
-                  ) : !seat.isMe ? (
-                    <span>Virsus: -</span>
-                  ) : null}
                 </div>
               ))}
             </div>
@@ -1415,7 +1484,7 @@ function App() {
             <div>Eile: {payload.state.currentTurnPlayerId?.slice(0, 8) ?? '-'}</div>
             <div>Kozeris: {payload.state.trumpSuit ?? 'none'}</div>
             <div>Kalades viduryje: {payload.state.centerDeckCount}</div>
-            {me ? <div className="statusProfile">{renderProfileBadge(me.profile, true)}</div> : null}
+            {me ? <div className="statusProfile">{renderProfileBadge(me.profile, true, me.name)}</div> : null}
           </section>
 
           <section className="panel">
@@ -1423,7 +1492,7 @@ function App() {
             <div className="players">
               {payload.state.players.map((p) => (
                 <article key={p.id} className={p.id === payload.yourPlayerId ? 'player me' : 'player'}>
-                  {renderProfileBadge(p.profile, true)}
+                  {renderProfileBadge(p.profile, true, p.name)}
                   <strong>{p.name}</strong>
                   <span>ID: {p.id.slice(0, 8)}</span>
                   <span>Kortos: {p.cardCount}</span>
@@ -1488,7 +1557,7 @@ function App() {
             {finalStandings.map((player, index) => (
               <article key={`finish-${player.id}`} className={index === 0 ? 'finishCard winner' : 'finishCard'}>
                 <div className="finishPlace">#{index + 1}</div>
-                {renderProfileBadge(player.profile)}
+                {renderProfileBadge(player.profile, false, player.name)}
                 <strong>{player.name}</strong>
                 <span>{player.id.slice(0, 8)}</span>
               </article>
