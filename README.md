@@ -82,6 +82,7 @@ Zingsniai:
 3. Sukurus servisa nustatyk env kintamuosius:
   - `APP_SECRET` (privalomas, ilgas random tekstas)
   - `CLIENT_URL` (tavo frontend URL, pvz. `https://your-frontend-domain.vercel.app`)
+  - `ALLOWED_ORIGINS` (frontend origin, pvz. `https://your-frontend-domain.vercel.app`)
 4. Deploy.
 
 Patikra:
@@ -123,6 +124,7 @@ Zingsniai:
 4. Aplinkos kintamieji Railway:
   - `APP_SECRET` (privalomas)
   - `CLIENT_URL` (tavo frontend domenas)
+  - `ALLOWED_ORIGINS` (frontend origin; jei keli, atskirk kableliu)
   - `PORT` (Railway duoda automatiskai)
 
 Pastaba:

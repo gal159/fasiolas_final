@@ -33,15 +33,28 @@ import {
 } from "../../shared/src/types";
 import { GameEngine } from "./gameEngine";
 
+const CLIENT_URL = process.env.CLIENT_URL ?? "http://localhost:5173";
+const APP_SECRET = process.env.APP_SECRET ?? "dev-secret-change-me";
+const ALLOWED_ORIGINS_RAW = process.env.ALLOWED_ORIGINS ?? CLIENT_URL;
+
+function normalizeOrigin(value: string): string {
+  return value.trim().replace(/\/+$/, "").toLowerCase();
+}
+
+const allowedOrigins = ALLOWED_ORIGINS_RAW.split(",")
+  .map((origin) => normalizeOrigin(origin))
+  .filter((origin) => origin.length > 0);
+
 const app = express();
-app.use(cors({ origin: "*" }));
+app.use(
+  cors({
+    origin: allowedOrigins.length > 0 ? allowedOrigins : true,
+  }),
+);
 app.use(express.json());
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
-
-const CLIENT_URL = process.env.CLIENT_URL ?? "http://localhost:5173";
-const APP_SECRET = process.env.APP_SECRET ?? "dev-secret-change-me";
 
 const AUTH_DB_PATH = resolve(process.cwd(), "data", "auth-users.db");
 
@@ -490,7 +503,9 @@ app.post("/auth/reset-password", async (req, res) => {
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: "*" },
+  cors: {
+    origin: allowedOrigins.length > 0 ? allowedOrigins : true,
+  },
 });
 
 const engine = new GameEngine();
