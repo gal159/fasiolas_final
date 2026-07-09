@@ -505,6 +505,7 @@ function App() {
   const [showTableWindow, setShowTableWindow] = useState(false)
   const [showProfileWindow, setShowProfileWindow] = useState(false)
   const [showMarketplaceWindow, setShowMarketplaceWindow] = useState(false)
+  const [isMainProfileFlipping, setIsMainProfileFlipping] = useState(false)
   const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null)
   const [playingHandSortMode, setPlayingHandSortMode] = useState<PlayingHandSortMode>('suit')
   const [flyingPlayedCard, setFlyingPlayedCard] = useState<{
@@ -528,6 +529,7 @@ function App() {
   const centerDropRef = useRef<HTMLDivElement | null>(null)
   const playingCardButtonRefs = useRef(new Map<number, HTMLButtonElement>())
   const tableSeatRefs = useRef(new Map<string, HTMLDivElement>())
+  const mainProfileFlipTimeoutRef = useRef<number | null>(null)
 
   function applyAuthBootstrap(bootstrap: AuthBootstrapPayload): void {
     const nextProfileSlots = resolveProfileSlots(bootstrap.profileSlots)
@@ -886,6 +888,18 @@ function App() {
     () => name || me?.name || displayNameFromEmail(authEmail),
     [authEmail, me?.name, name],
   )
+
+  useEffect(() => {
+    setIsMainProfileFlipping(false)
+  }, [profilePanelProfile])
+
+  useEffect(() => {
+    return () => {
+      if (mainProfileFlipTimeoutRef.current !== null) {
+        window.clearTimeout(mainProfileFlipTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const showHandInCurrentPhase = Boolean(payload && payload.state.phase === 'PLAYING')
 
@@ -1493,7 +1507,26 @@ function App() {
     )
   }
 
-  function renderProfileBadge(profile: PlayerProfile, compact = false, displayName?: string) {
+  function triggerMainPageProfileFlip(): void {
+    if (mainProfileFlipTimeoutRef.current !== null) {
+      window.clearTimeout(mainProfileFlipTimeoutRef.current)
+    }
+
+    setIsMainProfileFlipping(false)
+    window.setTimeout(() => {
+      setIsMainProfileFlipping(true)
+      mainProfileFlipTimeoutRef.current = window.setTimeout(() => {
+        setIsMainProfileFlipping(false)
+      }, 640)
+    }, 0)
+  }
+
+  function renderProfileBadge(
+    profile: PlayerProfile,
+    compact = false,
+    displayName?: string,
+    options?: { onClick?: () => void; isFlipping?: boolean },
+  ) {
     const avatarRarity = AVATAR_RARITY[profile.avatarId]
     const unlockGames = RARITY_GAMES_REQUIRED[avatarRarity]
     const tierLabel = RARITY_LABELS[avatarRarity]
@@ -1504,11 +1537,29 @@ function App() {
     } as CSSProperties
 
     const badgeClass = compact
-      ? `profileBadge compact fx-${profile.effectId} avatar-${profile.avatarId} bg-${profile.cardBackgroundId}`
-      : `profileBadge fx-${profile.effectId} avatar-${profile.avatarId} bg-${profile.cardBackgroundId}`
+      ? `profileBadge compact fx-${profile.effectId} avatar-${profile.avatarId} bg-${profile.cardBackgroundId}${options?.isFlipping ? ' is-flipping' : ''}${options?.onClick ? ' is-clickable' : ''}`
+      : `profileBadge fx-${profile.effectId} avatar-${profile.avatarId} bg-${profile.cardBackgroundId}${options?.isFlipping ? ' is-flipping' : ''}${options?.onClick ? ' is-clickable' : ''}`
+
+    const isInteractive = Boolean(options?.onClick)
 
     return (
-      <div className={badgeClass} style={style}>
+      <div
+        className={badgeClass}
+        style={style}
+        onClick={options?.onClick}
+        role={isInteractive ? 'button' : undefined}
+        tabIndex={isInteractive ? 0 : undefined}
+        onKeyDown={
+          isInteractive
+            ? (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  options?.onClick?.()
+                }
+              }
+            : undefined
+        }
+      >
         <div className="profileCardHeader">
           <span className={`profileCardTier tier-${profile.effectId} rarity-${avatarRarity}`}>{tierLabel}</span>
           <span className="profileCardSlot" role="note" aria-label={`Rarity ${tierLabel}, unlocked after ${unlockGames} played games`}>
@@ -2176,7 +2227,10 @@ function App() {
             <strong>Profilio langelis</strong>
             <span>Slotas {activeProfileSlot} | Taskai {account.points} | Zaidimai {account.gamesPlayed}</span>
           </div>
-          {renderProfileBadge(profilePanelProfile, true, profilePanelDisplayName)}
+          {renderProfileBadge(profilePanelProfile, true, profilePanelDisplayName, {
+            onClick: triggerMainPageProfileFlip,
+            isFlipping: isMainProfileFlipping,
+          })}
           <div className="actions">
             <button type="button" onClick={() => setShowProfileWindow(true)}>Atidaryti profilio langeli</button>
             <button type="button" onClick={() => { void saveProfile() }}>Issaugoti ir pritaikyti</button>
