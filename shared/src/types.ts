@@ -28,6 +28,8 @@ export const SKIN_OPTIONS = ["default", "striped", "chrome", "neon", "carbon", "
 
 export const EFFECT_OPTIONS = ["none", "outline", "glow", "fire", "shadow", "trail"] as const;
 
+export const CARD_BACKGROUND_OPTIONS = ["classic", "crimson", "emerald", "midnight", "parchment"] as const;
+
 export const PROFILE_SLOT_OPTIONS = ["A", "B", "C"] as const;
 
 export type ProfileColor = (typeof PROFILE_COLOR_OPTIONS)[number];
@@ -35,6 +37,7 @@ export type AvatarId = (typeof AVATAR_OPTIONS)[number];
 export type HatId = (typeof HAT_OPTIONS)[number];
 export type SkinId = (typeof SKIN_OPTIONS)[number];
 export type EffectId = (typeof EFFECT_OPTIONS)[number];
+export type CardBackgroundId = (typeof CARD_BACKGROUND_OPTIONS)[number];
 export type ProfileSlot = (typeof PROFILE_SLOT_OPTIONS)[number];
 
 export const RARITY_OPTIONS = ["common", "uncommon", "rare", "epic", "legendary", "mythic"] as const;
@@ -50,9 +53,21 @@ export const RARITY_PRICES: Record<RarityId, number> = {
   mythic: 10000,
 };
 
-export type ShopItemType = "avatar" | "hat" | "skin" | "effect";
+export const AVATAR_PRICE_OVERRIDES: Partial<Record<AvatarId, number>> = {
+  zeus: 2000,
+};
 
-export type ShopItemId = AvatarId | HatId | SkinId | EffectId;
+export const CARD_BACKGROUND_RARITY: Record<CardBackgroundId, RarityId> = {
+  classic: "common",
+  crimson: "uncommon",
+  emerald: "rare",
+  midnight: "epic",
+  parchment: "legendary",
+};
+
+export type ShopItemType = "avatar" | "hat" | "skin" | "effect" | "background";
+
+export type ShopItemId = AvatarId | HatId | SkinId | EffectId | CardBackgroundId;
 
 export const AVATAR_RARITY: Record<AvatarId, RarityId> = {
   zeus: "legendary",
@@ -95,20 +110,33 @@ export interface PlayerProfile {
   hatId: HatId;
   skinId: SkinId;
   effectId: EffectId;
+  cardBackgroundId: CardBackgroundId;
   profileSlot: ProfileSlot;
 }
+
+export type ProfileSlotMap = Record<ProfileSlot, PlayerProfile>;
 
 export interface PlayerUnlocks {
   avatars: AvatarId[];
   hats: HatId[];
   skins: SkinId[];
   effects: EffectId[];
+  backgrounds: CardBackgroundId[];
 }
 
 export interface PlayerAccountState {
   points: number;
   gamesPlayed: number;
   unlocked: PlayerUnlocks;
+}
+
+export interface AuthBootstrapPayload {
+  email: string;
+  playerName: string;
+  hasCompletedProfileSetup: boolean;
+  activeProfileSlot: ProfileSlot;
+  profileSlots: ProfileSlotMap;
+  account: PlayerAccountState;
 }
 
 export interface ShopCatalogItem {

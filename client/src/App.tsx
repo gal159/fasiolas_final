@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react'
 import { io, type Socket } from 'socket.io-client'
 import {
+  AVATAR_PRICE_OVERRIDES,
   AVATAR_RARITY,
   AVATAR_OPTIONS,
+  type AuthBootstrapPayload,
+  CARD_BACKGROUND_OPTIONS,
+  CARD_BACKGROUND_RARITY,
   EFFECT_RARITY,
   EFFECT_OPTIONS,
   HAT_OPTIONS,
@@ -16,6 +20,7 @@ import {
   type ClientStatePayload,
   type PlayerAccountState,
   type PlayerProfile,
+  type ProfileSlotMap,
   type RarityId,
   type ShopCatalogItem,
   type ShopItemType,
@@ -63,6 +68,14 @@ const EFFECT_LABELS: Record<PlayerProfile['effectId'], string> = {
   trail: 'Sleifas',
 }
 
+const CARD_BACKGROUND_LABELS: Record<PlayerProfile['cardBackgroundId'], string> = {
+  classic: 'Klasikinis',
+  crimson: 'Crimson flame',
+  emerald: 'Emerald grove',
+  midnight: 'Midnight arc',
+  parchment: 'Ancient parchment',
+}
+
 const AVATAR_ELEMENT_LABELS: Record<PlayerProfile['avatarId'], string> = {
   zeus: 'Sky',
   warrior: 'Steel',
@@ -97,9 +110,10 @@ const RARITY_GAMES_REQUIRED: Record<RarityId, number> = {
   mythic: 260,
 }
 
-const SHOP_SECTION_ORDER: ShopItemType[] = ['effect', 'skin', 'hat', 'avatar']
+const SHOP_SECTION_ORDER: ShopItemType[] = ['background', 'effect', 'skin', 'hat', 'avatar']
 
 const SHOP_SECTION_LABELS: Record<ShopItemType, string> = {
+  background: 'Card backgrounds',
   effect: 'Effects',
   skin: 'Skins',
   hat: 'Hats',
@@ -107,17 +121,17 @@ const SHOP_SECTION_LABELS: Record<ShopItemType, string> = {
 }
 
 const SHOP_ITEM_LABELS: Record<ShopItemType, Record<string, string>> = {
+  background: CARD_BACKGROUND_LABELS,
   effect: EFFECT_LABELS,
   skin: SKIN_LABELS,
   hat: HAT_LABELS,
   avatar: AVATAR_LABELS,
 }
 
+type AppStage = 'loading' | 'auth' | 'profileSetup' | 'hub'
+
 function createEmptyAccount(): PlayerAccountState {
-  const defaultAvatars = Array.from(new Set([
-    ...AVATAR_OPTIONS.filter((id) => AVATAR_RARITY[id] === 'common'),
-    'zeus' as const,
-  ]))
+  const defaultAvatars = AVATAR_OPTIONS.filter((id) => AVATAR_RARITY[id] === 'common')
 
   return {
     points: 0,
@@ -127,11 +141,29 @@ function createEmptyAccount(): PlayerAccountState {
       hats: HAT_OPTIONS.filter((id) => HAT_RARITY[id] === 'common'),
       skins: SKIN_OPTIONS.filter((id) => SKIN_RARITY[id] === 'common'),
       effects: EFFECT_OPTIONS.filter((id) => EFFECT_RARITY[id] === 'common'),
+      backgrounds: CARD_BACKGROUND_OPTIONS.filter((id) => CARD_BACKGROUND_RARITY[id] === 'common'),
     },
   }
 }
 
-type ProfileSlotMap = Record<PlayerProfile['profileSlot'], PlayerProfile>
+function normalizeAccountState(account: PlayerAccountState | undefined): PlayerAccountState {
+  const fallback = createEmptyAccount()
+  if (!account) {
+    return fallback
+  }
+
+  return {
+    points: account.points ?? 0,
+    gamesPlayed: account.gamesPlayed ?? 0,
+    unlocked: {
+      avatars: account.unlocked?.avatars ?? fallback.unlocked.avatars,
+      hats: account.unlocked?.hats ?? fallback.unlocked.hats,
+      skins: account.unlocked?.skins ?? fallback.unlocked.skins,
+      effects: account.unlocked?.effects ?? fallback.unlocked.effects,
+      backgrounds: account.unlocked?.backgrounds ?? fallback.unlocked.backgrounds,
+    },
+  }
+}
 
 function playerStorageKey(roomCode: string): string {
   return `fasiolas:${roomCode}`
@@ -157,10 +189,11 @@ function createDefaultProfile(slot: PlayerProfile['profileSlot'] = PROFILE_SLOT_
   const normalizedIndex = Math.max(0, slotIndex)
   return {
     baseColor: PROFILE_COLOR_OPTIONS[normalizedIndex % PROFILE_COLOR_OPTIONS.length],
-    avatarId: 'zeus',
+    avatarId: 'warrior',
     hatId: 'none',
     skinId: 'default',
     effectId: 'none',
+    cardBackgroundId: 'classic',
     profileSlot: slot,
   }
 }
@@ -207,6 +240,9 @@ function isPlayerProfile(value: unknown): value is PlayerProfile {
     SKIN_OPTIONS.includes(record.skinId as PlayerProfile['skinId']) &&
     typeof record.effectId === 'string' &&
     EFFECT_OPTIONS.includes(record.effectId as PlayerProfile['effectId']) &&
+    (typeof record.cardBackgroundId === 'undefined' ||
+      (typeof record.cardBackgroundId === 'string' &&
+        CARD_BACKGROUND_OPTIONS.includes(record.cardBackgroundId as PlayerProfile['cardBackgroundId']))) &&
     typeof record.profileSlot === 'string' &&
     PROFILE_SLOT_OPTIONS.includes(record.profileSlot as PlayerProfile['profileSlot'])
   )
@@ -234,6 +270,25 @@ function loadStoredProfileSlots(): ProfileSlotMap {
   } catch {
     return fallback
   }
+}
+
+function resolveProfileSlots(value: unknown): ProfileSlotMap {
+  const fallback = createDefaultProfileSlots()
+  if (!value || typeof value !== 'object') {
+    return fallback
+  }
+
+  const parsed = value as Record<string, unknown>
+  const resolved: ProfileSlotMap = { ...fallback }
+
+  for (const slot of PROFILE_SLOT_OPTIONS) {
+    const candidate = parsed[slot]
+    if (isPlayerProfile(candidate)) {
+      resolved[slot] = withSlot(normalizeLegacyProfile(candidate), slot)
+    }
+  }
+
+  return resolved
 }
 
 function cardLabel(card: Card | null): string {
@@ -370,17 +425,25 @@ function normalizeLegacyProfile(profile: PlayerProfile): PlayerProfile {
     pablo: 'warrior',
   }
 
+  const normalizedBackground =
+    typeof (profile as PlayerProfile & { cardBackgroundId?: string }).cardBackgroundId === 'string' &&
+    CARD_BACKGROUND_OPTIONS.includes((profile as PlayerProfile & { cardBackgroundId?: string }).cardBackgroundId as PlayerProfile['cardBackgroundId'])
+      ? ((profile as PlayerProfile & { cardBackgroundId?: string }).cardBackgroundId as PlayerProfile['cardBackgroundId'])
+      : 'classic'
+
   const normalizedAvatar = avatarAliases[profile.avatarId] ?? profile.avatarId
   if (AVATAR_OPTIONS.includes(normalizedAvatar as PlayerProfile['avatarId'])) {
     return {
       ...profile,
       avatarId: normalizedAvatar as PlayerProfile['avatarId'],
+      cardBackgroundId: normalizedBackground,
     }
   }
 
   return {
     ...profile,
     avatarId: 'zeus',
+    cardBackgroundId: normalizedBackground,
   }
 }
 
@@ -415,7 +478,8 @@ function displayNameFromEmail(email: string): string {
 
 function App() {
   const initialSlots = useMemo(() => loadStoredProfileSlots(), [])
-  const [isLoggedIn, setIsLoggedIn] = useState(() => Boolean(sessionStorage.getItem(LOGIN_SESSION_STORAGE_KEY)))
+  const [appStage, setAppStage] = useState<AppStage>(() => (sessionStorage.getItem(LOGIN_SESSION_STORAGE_KEY) ? 'loading' : 'auth'))
+  const [authEmail, setAuthEmail] = useState(() => sessionStorage.getItem(LOGIN_SESSION_STORAGE_KEY) ?? '')
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot' | 'reset'>('login')
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
@@ -440,8 +504,51 @@ function App() {
   const [selectedTargetId, setSelectedTargetId] = useState('')
   const [showTableWindow, setShowTableWindow] = useState(false)
   const [showProfileWindow, setShowProfileWindow] = useState(false)
+  const [showMarketplaceWindow, setShowMarketplaceWindow] = useState(false)
   const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null)
   const [playingHandSortMode, setPlayingHandSortMode] = useState<PlayingHandSortMode>('suit')
+  const [flyingPlayedCard, setFlyingPlayedCard] = useState<{
+    card: Card
+    fromX: number
+    fromY: number
+    toX: number
+    toY: number
+    width: number
+    height: number
+  } | null>(null)
+  const [flyingRevealedCard, setFlyingRevealedCard] = useState<{
+    card: Card
+    fromX: number
+    fromY: number
+    toX: number
+    toY: number
+    width: number
+    height: number
+  } | null>(null)
+  const centerDropRef = useRef<HTMLDivElement | null>(null)
+  const playingCardButtonRefs = useRef(new Map<number, HTMLButtonElement>())
+  const tableSeatRefs = useRef(new Map<string, HTMLDivElement>())
+
+  function applyAuthBootstrap(bootstrap: AuthBootstrapPayload): void {
+    const nextProfileSlots = resolveProfileSlots(bootstrap.profileSlots)
+    const nextActiveProfileSlot = PROFILE_SLOT_OPTIONS.includes(bootstrap.activeProfileSlot)
+      ? bootstrap.activeProfileSlot
+      : PROFILE_SLOT_OPTIONS[0]
+    const nextProfileDraft = withSlot(nextProfileSlots[nextActiveProfileSlot], nextActiveProfileSlot)
+    const nextEmail = bootstrap.email.trim().toLowerCase()
+
+    sessionStorage.setItem(LOGIN_SESSION_STORAGE_KEY, nextEmail)
+    setAuthEmail(nextEmail)
+    setName(bootstrap.playerName?.trim() || displayNameFromEmail(nextEmail))
+    setAccount(normalizeAccountState(bootstrap.account))
+    setProfileSlots(nextProfileSlots)
+    setActiveProfileSlot(nextActiveProfileSlot)
+    setProfileDraft(nextProfileDraft)
+    setLoginError('')
+    setError('')
+    setShowProfileWindow(false)
+    setAppStage(bootstrap.hasCompletedProfileSetup ? 'hub' : 'profileSetup')
+  }
 
   useEffect(() => {
     const s = io(SERVER_URL)
@@ -455,7 +562,7 @@ function App() {
 
       const normalizedPayload: ClientStatePayload = {
         ...nextPayload,
-        account: nextPayload.account ?? createEmptyAccount(),
+        account: normalizeAccountState(nextPayload.account),
         state: {
           ...nextPayload.state,
           players: normalizedPlayers,
@@ -499,6 +606,49 @@ function App() {
   }, [])
 
   useEffect(() => {
+    const storedEmail = sessionStorage.getItem(LOGIN_SESSION_STORAGE_KEY)?.trim().toLowerCase()
+    if (!storedEmail) {
+      setAppStage('auth')
+      return
+    }
+
+    let cancelled = false
+
+    const bootstrapSession = async (): Promise<void> => {
+      try {
+        const response = await fetch(`${SERVER_URL}/auth/bootstrap`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: storedEmail }),
+        })
+        const payload = (await response.json()) as ({ ok: boolean; error?: string } & Partial<AuthBootstrapPayload>)
+        if (cancelled) {
+          return
+        }
+        if (!response.ok || !payload.ok || !payload.email || !payload.activeProfileSlot || !payload.profileSlots || !payload.account) {
+          throw new Error(payload.error ?? 'Nepavyko atkurti sesijos')
+        }
+
+        applyAuthBootstrap(payload as AuthBootstrapPayload)
+      } catch {
+        if (cancelled) {
+          return
+        }
+        sessionStorage.removeItem(LOGIN_SESSION_STORAGE_KEY)
+        setAuthEmail('')
+        setAppStage('auth')
+        setLoginError('Sesija nebegalioja. Prisijunk is naujo.')
+      }
+    }
+
+    void bootstrapSession()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     sessionStorage.setItem(PROFILE_SLOTS_STORAGE_KEY, JSON.stringify(profileSlots))
   }, [profileSlots])
 
@@ -514,8 +664,24 @@ function App() {
     refreshShopCatalog()
   }, [payload?.yourPlayerId])
 
+  useEffect(() => {
+    if (!socket) {
+      return
+    }
+    refreshShopCatalog()
+  }, [socket])
+
+  useEffect(() => {
+    if (!showMarketplaceWindow) {
+      return
+    }
+    void refreshAccountFromAuth()
+    refreshShopCatalog()
+  }, [showMarketplaceWindow])
+
   const shopByType = useMemo(() => {
     const grouped: Record<ShopItemType, ShopCatalogItem[]> = {
+      background: [],
       effect: [],
       skin: [],
       hat: [],
@@ -539,6 +705,9 @@ function App() {
     if (type === 'skin') {
       return account.unlocked.skins.includes(id as PlayerProfile['skinId'])
     }
+    if (type === 'background') {
+      return account.unlocked.backgrounds.includes(id as PlayerProfile['cardBackgroundId'])
+    }
     return account.unlocked.effects.includes(id as PlayerProfile['effectId'])
   }
 
@@ -553,6 +722,10 @@ function App() {
     }
 
     if (type === 'avatar') {
+      const override = AVATAR_PRICE_OVERRIDES[id as PlayerProfile['avatarId']]
+      if (typeof override === 'number') {
+        return override
+      }
       return RARITY_PRICES[AVATAR_RARITY[id as PlayerProfile['avatarId']]]
     }
     if (type === 'hat') {
@@ -560,6 +733,9 @@ function App() {
     }
     if (type === 'skin') {
       return RARITY_PRICES[SKIN_RARITY[id as PlayerProfile['skinId']]]
+    }
+    if (type === 'background') {
+      return RARITY_PRICES[CARD_BACKGROUND_RARITY[id as PlayerProfile['cardBackgroundId']]]
     }
     return RARITY_PRICES[EFFECT_RARITY[id as PlayerProfile['effectId']]]
   }
@@ -579,6 +755,9 @@ function App() {
     if (type === 'skin') {
       return SKIN_RARITY[id as PlayerProfile['skinId']]
     }
+    if (type === 'background') {
+      return CARD_BACKGROUND_RARITY[id as PlayerProfile['cardBackgroundId']]
+    }
     return EFFECT_RARITY[id as PlayerProfile['effectId']]
   }
 
@@ -586,45 +765,137 @@ function App() {
     return !itemOwned(type, id)
   }
 
-  const me = useMemo(
-    () => payload?.state.players.find((p) => p.id === payload.yourPlayerId) ?? null,
-    [payload],
-  )
+  function isItemEquipped(type: ShopItemType, id: string): boolean {
+    if (type === 'avatar') {
+      return profileDraft.avatarId === id
+    }
+    if (type === 'hat') {
+      return profileDraft.hatId === id
+    }
+    if (type === 'skin') {
+      return profileDraft.skinId === id
+    }
+    if (type === 'background') {
+      return profileDraft.cardBackgroundId === id
+    }
+    return profileDraft.effectId === id
+  }
 
-  const profilePanelProfile = useMemo(
-    () => me?.profile ?? profileDraft,
-    [me, profileDraft],
-  )
+  function equipOwnedItem(itemType: ShopItemType, itemId: string): void {
+    if (!itemOwned(itemType, itemId)) {
+      return
+    }
 
-  const isMyTurn = payload?.state.currentTurnPlayerId === payload?.yourPlayerId
-  const visibleHandIndices = useMemo<number[]>(() => {
+    updateProfileDraft((current) => {
+      if (itemType === 'avatar') {
+        return { ...current, avatarId: itemId as PlayerProfile['avatarId'] }
+      }
+      if (itemType === 'hat') {
+        return { ...current, hatId: itemId as PlayerProfile['hatId'] }
+      }
+      if (itemType === 'skin') {
+        return { ...current, skinId: itemId as PlayerProfile['skinId'] }
+      }
+      if (itemType === 'background') {
+        return { ...current, cardBackgroundId: itemId as PlayerProfile['cardBackgroundId'] }
+      }
+      return { ...current, effectId: itemId as PlayerProfile['effectId'] }
+    })
+  }
+
+  function renderMarketplacePanel(title = 'Marketplace', hint = 'Isleisk taskus kosmetikoms ir iskart naudok jas profilyje.') {
+    return (
+      <div className="shopPanel" aria-label="Marketplace panel">
+        <div className="shopPanelHeader">
+          <strong>{title}</strong>
+          <span>Taskai: {account.points} | Zaidimai: {account.gamesPlayed}</span>
+        </div>
+        <p className="shopPanelHint">{hint}</p>
+        {error ? <p className="shopPanelError">{error}</p> : null}
+
+        {SHOP_SECTION_ORDER.map((sectionType) => (
+          <div key={sectionType} className="shopSection">
+            <h4>{SHOP_SECTION_LABELS[sectionType]}</h4>
+            <div className="shopItemsGrid">
+              {shopByType[sectionType].length === 0 ? (
+                <span className="shopLoadingHint">Katalogas kraunamas...</span>
+              ) : null}
+              {shopByType[sectionType].map((item) => {
+                const owned = itemOwned(item.type, String(item.id))
+                const equipped = isItemEquipped(item.type, String(item.id))
+                const canAfford = account.points >= item.cost
+                const itemKey = `${item.type}:${String(item.id)}`
+                const isPending = pendingShopKey === itemKey
+                const label = SHOP_ITEM_LABELS[item.type][String(item.id)] ?? String(item.id)
+
+                return (
+                  <article key={itemKey} className={`shopItemCard rarity-${item.rarity} ${owned ? 'owned' : 'locked'}`}>
+                    <div className="shopItemTop">
+                      <strong>{label}</strong>
+                      <span className="shopRarityChip">{RARITY_LABELS[item.rarity]}</span>
+                    </div>
+                    <div className="shopItemMeta">
+                      <span>{item.cost} pts</span>
+                      <span>{equipped ? 'Apsimauta' : owned ? 'Owned' : 'Locked'}</span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={(!owned && !canAfford) || isPending}
+                      onClick={() => {
+                        if (owned) {
+                          equipOwnedItem(item.type, String(item.id))
+                          return
+                        }
+                        buyShopItem(item.type, String(item.id))
+                      }}
+                    >
+                      {equipped ? 'Apsimauta' : owned ? 'Apsimauti' : isPending ? 'Perkama...' : canAfford ? 'Pirkti' : 'Truksta tasku'}
+                    </button>
+                  </article>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  const sortedPlayingHand = useMemo(() => {
     if (!payload) {
       return []
     }
 
-    if (payload.state.phase !== 'DEALING') {
-      return payload.yourHand.map((_, idx) => idx)
-    }
-
-    if (payload.state.pendingFasiolas) {
-      return payload.yourHand.map((_, idx) => idx)
-    }
-
-    if (payload.yourHand.length === 0) {
-      return []
-    }
-
-    return [payload.yourHand.length - 1]
-  }, [payload])
-
-  const showHandInCurrentPhase = visibleHandIndices.length > 0
-  const sortedPlayingHand = useMemo<PlayingHandEntry[]>(() => {
-    if (!payload) {
-      return []
-    }
     const entries = payload.yourHand.map((card, index) => ({ card, index }))
     return sortPlayingHandEntries(entries, playingHandSortMode)
   }, [payload, playingHandSortMode])
+
+  const me = useMemo(
+    () => payload?.state.players.find((player) => player.id === payload.yourPlayerId) ?? null,
+    [payload],
+  )
+
+  const isMyTurn = Boolean(payload && payload.state.currentTurnPlayerId === payload.yourPlayerId)
+
+  const profilePanelProfile = useMemo(
+    () => withSlot(profileDraft, activeProfileSlot),
+    [activeProfileSlot, profileDraft],
+  )
+
+  const profilePanelDisplayName = useMemo(
+    () => name || me?.name || displayNameFromEmail(authEmail),
+    [authEmail, me?.name, name],
+  )
+
+  const showHandInCurrentPhase = Boolean(payload && payload.state.phase === 'PLAYING')
+
+  const visibleHandIndices = useMemo(() => {
+    if (!payload || payload.state.phase !== 'PLAYING') {
+      return []
+    }
+
+    return payload.yourHand.map((_card, index) => index)
+  }, [payload])
 
   const canDrawFromCenterDeck = Boolean(
     payload &&
@@ -723,8 +994,30 @@ function App() {
 
   function refreshAccount(): void {
     emitAck('get_account', {}, (response) => {
-      setAccount((response.account as PlayerAccountState) ?? createEmptyAccount())
+      setAccount(normalizeAccountState(response.account as PlayerAccountState))
     })
+  }
+
+  async function refreshAccountFromAuth(): Promise<void> {
+    if (!authEmail) {
+      return
+    }
+
+    try {
+      const response = await fetch(`${SERVER_URL}/auth/bootstrap`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: authEmail }),
+      })
+      const payload = (await response.json()) as ({ ok: boolean; error?: string } & Partial<AuthBootstrapPayload>)
+      if (!response.ok || !payload.ok || !payload.account) {
+        return
+      }
+
+      setAccount(normalizeAccountState(payload.account))
+    } catch {
+      // Keep current account value if auth refresh fails.
+    }
   }
 
   function refreshShopCatalog(): void {
@@ -735,24 +1028,51 @@ function App() {
     })
   }
 
-  function buyShopItem(itemType: ShopItemType, itemId: string): void {
-    if (!socket) {
-      return
-    }
+  async function buyShopItem(itemType: ShopItemType, itemId: string): Promise<void> {
     const shopKey = `${itemType}:${itemId}`
     setPendingShopKey(shopKey)
     setError('')
-    socket.emit('purchase_shop_item', { itemType, itemId }, (response: { ok: boolean; error?: string; account?: PlayerAccountState; catalog?: ShopCatalogItem[] }) => {
+
+    const canUseSocketPurchase = Boolean(socket && payload?.yourPlayerId)
+    if (canUseSocketPurchase) {
+      socket?.emit('purchase_shop_item', { itemType, itemId }, (response: { ok: boolean; error?: string; account?: PlayerAccountState; catalog?: ShopCatalogItem[] }) => {
+        setPendingShopKey('')
+        if (!response?.ok) {
+          setError(response?.error ?? 'Server error')
+          return
+        }
+        setAccount(normalizeAccountState(response.account))
+        if (Array.isArray(response.catalog)) {
+          setShopCatalog(response.catalog)
+        }
+      })
+      return
+    }
+
+    if (!authEmail) {
       setPendingShopKey('')
-      if (!response?.ok) {
-        setError(response?.error ?? 'Server error')
+      setError('Nerasta prisijungimo sesija')
+      return
+    }
+
+    try {
+      const response = await fetch(`${SERVER_URL}/auth/purchase`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: authEmail, itemType, itemId }),
+      })
+      const result = (await response.json()) as { ok: boolean; error?: string; account?: PlayerAccountState }
+      if (!response.ok || !result.ok || !result.account) {
+        setError(result.error ?? 'Server error')
         return
       }
-      setAccount(response.account ?? createEmptyAccount())
-      if (Array.isArray(response.catalog)) {
-        setShopCatalog(response.catalog)
-      }
-    })
+
+      setAccount(normalizeAccountState(result.account))
+    } catch {
+      setError('Serveris nepasiekiamas. Patikrink ar paleistas backend.')
+    } finally {
+      setPendingShopKey('')
+    }
   }
 
   function createRoom(): void {
@@ -801,19 +1121,69 @@ function App() {
     })
   }
 
-  function saveProfile(): void {
+  async function persistProfileSelection(completeSetup = false): Promise<boolean> {
+    if (!authEmail) {
+      setError('Nerasta prisijungimo sesija')
+      return false
+    }
+
+    const profileToSave = withSlot(profileDraft, activeProfileSlot)
+
+    try {
+      const response = await fetch(`${SERVER_URL}/auth/profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: authEmail,
+          activeProfileSlot,
+          profile: profileToSave,
+          completeSetup,
+        }),
+      })
+      const payload = (await response.json()) as ({ ok: boolean; error?: string } & Partial<AuthBootstrapPayload>)
+      if (!response.ok || !payload.ok || !payload.email || !payload.activeProfileSlot || !payload.profileSlots || !payload.account) {
+        setError(payload.error ?? 'Nepavyko issaugoti profilio')
+        return false
+      }
+
+      applyAuthBootstrap(payload as AuthBootstrapPayload)
+      return true
+    } catch {
+      setError('Serveris nepasiekiamas. Patikrink ar paleistas backend.')
+      return false
+    }
+  }
+
+  async function saveProfile(applyToLobby = true): Promise<void> {
     const profileToSave = withSlot(profileDraft, activeProfileSlot)
     setProfileSlots((slots) => ({ ...slots, [activeProfileSlot]: profileToSave }))
+
+    const saved = await persistProfileSelection(false)
+    if (!saved) {
+      return
+    }
 
     if (!payload) {
       return
     }
     if (payload.state.phase !== 'LOBBY') {
-      setError('Profili galima taikyti tik laukimo fazeje')
+      if (applyToLobby) {
+        setError('Profilis issaugotas paskyroje. Ji galesi pritaikyti kitame lobby.')
+      }
       return
     }
 
+    setError('')
     emitAck('update_profile', { profile: profileToSave })
+  }
+
+  async function completeProfileSetup(): Promise<void> {
+    const completed = await persistProfileSelection(true)
+    if (!completed) {
+      return
+    }
+
+    setAppStage('hub')
   }
 
   function resetProfileDraft(): void {
@@ -845,7 +1215,7 @@ function App() {
 
     if (payload.state.phase === 'DEALING') {
       if (payload.state.revealedDrawCard) {
-        sendAction({ type: 'PLACE_REVEALED', toPlayerId: targetPlayerId })
+        handlePlaceRevealedWithSlide(targetPlayerId)
         setDraggedCardIndex(null)
         return
       }
@@ -877,7 +1247,49 @@ function App() {
     if (payload.state.phase !== 'DEALING' || !payload.state.revealedDrawCard) {
       return
     }
-    sendAction({ type: 'PLACE_REVEALED', toPlayerId: targetPlayerId })
+    handlePlaceRevealedWithSlide(targetPlayerId)
+  }
+
+  function handlePlaceRevealedWithSlide(targetPlayerId: string): void {
+    if (!payload || !isMyTurn) {
+      return
+    }
+    if (payload.state.phase !== 'DEALING' || !payload.state.revealedDrawCard) {
+      return
+    }
+    if (flyingRevealedCard || flyingPlayedCard) {
+      return
+    }
+
+    const centerArea = centerDropRef.current
+    const targetSeat = tableSeatRefs.current.get(targetPlayerId) ?? null
+    const source = (centerArea?.querySelector('.deckRevealAnim .playingCard') as HTMLElement | null) ?? centerArea
+    const target = (targetSeat?.querySelector('.seatTopCard') as HTMLElement | null) ?? targetSeat
+
+    if (!source || !target) {
+      sendAction({ type: 'PLACE_REVEALED', toPlayerId: targetPlayerId })
+      return
+    }
+
+    const sourceRect = source.getBoundingClientRect()
+    const targetRect = target.getBoundingClientRect()
+    const toX = targetRect.left + (targetRect.width - sourceRect.width) / 2
+    const toY = targetRect.top + (targetRect.height - sourceRect.height) / 2
+
+    setFlyingRevealedCard({
+      card: payload.state.revealedDrawCard,
+      fromX: sourceRect.left,
+      fromY: sourceRect.top,
+      toX,
+      toY,
+      width: sourceRect.width,
+      height: sourceRect.height,
+    })
+
+    window.setTimeout(() => {
+      sendAction({ type: 'PLACE_REVEALED', toPlayerId: targetPlayerId })
+      setFlyingRevealedCard(null)
+    }, 330)
   }
 
   function drawFromCenterDeck(): void {
@@ -918,6 +1330,39 @@ function App() {
 
     sendAction({ type: 'PLAY_CARD', cardIndex: draggedCardIndex })
     setDraggedCardIndex(null)
+  }
+
+  function handlePlayCardWithSlide(index: number, card: Card, sourceElement?: HTMLElement | null): void {
+    if (!isMyTurn || flyingPlayedCard) {
+      return
+    }
+
+    const source = sourceElement ?? playingCardButtonRefs.current.get(index) ?? null
+    const target = centerDropRef.current
+    if (!source || !target) {
+      sendAction({ type: 'PLAY_CARD', cardIndex: index })
+      return
+    }
+
+    const sourceRect = source.getBoundingClientRect()
+    const targetRect = target.getBoundingClientRect()
+    const toX = targetRect.left + (targetRect.width - sourceRect.width) / 2
+    const toY = targetRect.top + (targetRect.height - sourceRect.height) / 2
+
+    setFlyingPlayedCard({
+      card,
+      fromX: sourceRect.left,
+      fromY: sourceRect.top,
+      toX,
+      toY,
+      width: sourceRect.width,
+      height: sourceRect.height,
+    })
+
+    window.setTimeout(() => {
+      sendAction({ type: 'PLAY_CARD', cardIndex: index })
+      setFlyingPlayedCard(null)
+    }, 330)
   }
 
   function renderVisualCard(card: Card, compact = false) {
@@ -981,14 +1426,14 @@ function App() {
             Atversti korta is kalades
           </button>
           <button
-            disabled={!isMyTurn || !selectedTargetId || payload.state.revealedDrawCard === null}
-            onClick={() => sendAction({ type: 'PLACE_REVEALED', toPlayerId: selectedTargetId })}
+            disabled={!isMyTurn || !selectedTargetId || payload.state.revealedDrawCard === null || Boolean(flyingRevealedCard)}
+            onClick={() => handlePlaceRevealedWithSlide(selectedTargetId)}
           >
             Padeti atversta korta pasirinktam
           </button>
           <button
-            disabled={!isMyTurn || payload.state.revealedDrawCard === null}
-            onClick={() => sendAction({ type: 'PLACE_REVEALED', toPlayerId: payload.yourPlayerId })}
+            disabled={!isMyTurn || payload.state.revealedDrawCard === null || Boolean(flyingRevealedCard)}
+            onClick={() => handlePlaceRevealedWithSlide(payload.yourPlayerId)}
           >
             Padeti atversta korta sau
           </button>
@@ -1052,15 +1497,15 @@ function App() {
     const avatarRarity = AVATAR_RARITY[profile.avatarId]
     const unlockGames = RARITY_GAMES_REQUIRED[avatarRarity]
     const tierLabel = RARITY_LABELS[avatarRarity]
-    const rarityCost = RARITY_PRICES[avatarRarity]
+    const rarityCost = itemCost('avatar', profile.avatarId)
     const style = {
       '--profile-accent': profile.baseColor,
       '--profile-accent-soft': hexToRgba(profile.baseColor, compact ? 0.2 : 0.28),
     } as CSSProperties
 
     const badgeClass = compact
-      ? `profileBadge compact fx-${profile.effectId} avatar-${profile.avatarId}`
-      : `profileBadge fx-${profile.effectId} avatar-${profile.avatarId}`
+      ? `profileBadge compact fx-${profile.effectId} avatar-${profile.avatarId} bg-${profile.cardBackgroundId}`
+      : `profileBadge fx-${profile.effectId} avatar-${profile.avatarId} bg-${profile.cardBackgroundId}`
 
     return (
       <div className={badgeClass} style={style}>
@@ -1160,16 +1605,13 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       })
-      const payload = (await response.json()) as { ok: boolean; error?: string; email?: string; playerName?: string }
-      if (!response.ok || !payload.ok) {
+      const payload = (await response.json()) as ({ ok: boolean; error?: string } & Partial<AuthBootstrapPayload>)
+      if (!response.ok || !payload.ok || !payload.email || !payload.activeProfileSlot || !payload.profileSlots || !payload.account) {
         setLoginError(payload.error ?? 'Prisijungti nepavyko')
         return
       }
 
-      setLoginError('')
-      sessionStorage.setItem(LOGIN_SESSION_STORAGE_KEY, payload.email ?? email)
-      setIsLoggedIn(true)
-      setName(payload.playerName?.trim() || displayNameFromEmail(payload.email ?? email))
+      applyAuthBootstrap(payload as AuthBootstrapPayload)
     } catch {
       setLoginError('Serveris nepasiekiamas. Patikrink ar paleistas backend.')
     }
@@ -1321,7 +1763,8 @@ function App() {
 
   function handleLogout(): void {
     sessionStorage.removeItem(LOGIN_SESSION_STORAGE_KEY)
-    setIsLoggedIn(false)
+    setAuthEmail('')
+    setAppStage('auth')
     setLoginPassword('')
     setLoginError('')
     setLoginInfo('')
@@ -1332,7 +1775,35 @@ function App() {
     setShowProfileWindow(false)
   }
 
-  if (!isLoggedIn) {
+  function returnToMainMenu(): void {
+    const activeRoomCode = payload?.state.roomCode ?? roomCode
+    if (activeRoomCode) {
+      sessionStorage.removeItem(playerStorageKey(activeRoomCode))
+    }
+
+    setError('')
+    setPayload(null)
+    setRoomCode('')
+    setRoomCodeInput('')
+    setShowTableWindow(false)
+    setShowProfileWindow(false)
+    setShowMarketplaceWindow(false)
+    setDraggedCardIndex(null)
+    setSelectedTargetId('')
+  }
+
+  if (appStage === 'loading') {
+    return (
+      <div className="page">
+        <section className="panel loginPanel">
+          <h1>Kraunama paskyra</h1>
+          <p className="loginHint">Atkuriame tavo profili, kosmetikas ir paskyros busena.</p>
+        </section>
+      </div>
+    )
+  }
+
+  if (appStage === 'auth') {
     return (
       <div className="page">
         <section className="panel loginPanel">
@@ -1451,6 +1922,218 @@ function App() {
     )
   }
 
+  if (appStage === 'profileSetup') {
+    return (
+      <div className="page profileSetupPage">
+        <section className={`profileWindow panel profileSetupPanel window-effect-${profileDraft.effectId}`}>
+          <div className="profileWindowHeader profileSetupHeader">
+            <div>
+              <h1>Sukurk savo profili</h1>
+              <p>Pasirink aktyvu herojaus stiliu. Si zingsni pamatysi tik pirma karta prisijunges.</p>
+            </div>
+            <div className="profileSetupMeta">
+              <strong>{name || displayNameFromEmail(authEmail)}</strong>
+              <span>Slotas {activeProfileSlot} | Taskai {account.points}</span>
+            </div>
+          </div>
+
+          <div className="profileWindowBody">
+            <div className="loadoutStage">
+              {renderProfileBadge(profileDraft, false, name || displayNameFromEmail(authEmail))}
+              <p>Susikurk pradine isvaizda dabar. Veliau galesi grizti, keisti slotus ir naudoti marketplace kosmetikas.</p>
+            </div>
+
+            <div className="customizationPanel">
+              <div className="slotSelector" role="tablist" aria-label="Profilio lizdai">
+                {PROFILE_SLOT_OPTIONS.map((slot) => (
+                  <button
+                    key={slot}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeProfileSlot === slot}
+                    className={activeProfileSlot === slot ? 'slotButton active' : 'slotButton'}
+                    onClick={() => setActiveProfileSlot(slot)}
+                  >
+                    Lizdas {slot}
+                  </button>
+                ))}
+              </div>
+
+              <div className="customizationGrid">
+                <div className="row">
+                  <label htmlFor="setup-card-background">Korteles fonas</label>
+                  <select
+                    id="setup-card-background"
+                    value={profileDraft.cardBackgroundId}
+                    onChange={(event) => updateProfileDraft((current) => ({ ...current, cardBackgroundId: event.target.value as PlayerProfile['cardBackgroundId'] }))}
+                  >
+                    {CARD_BACKGROUND_OPTIONS.map((background) => {
+                      const rarity = itemRarity('background', background)
+                      const cost = itemCost('background', background)
+                      const locked = isLocked('background', background)
+                      return (
+                        <option key={background} value={background} disabled={locked}>
+                          {locked
+                            ? `${CARD_BACKGROUND_LABELS[background]} (${RARITY_LABELS[rarity]} ${cost} pts, locked)`
+                            : `${CARD_BACKGROUND_LABELS[background]} (${RARITY_LABELS[rarity]})`}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </div>
+
+                <div className="row">
+                  <label htmlFor="setup-avatar">Veikejas</label>
+                  <select
+                    id="setup-avatar"
+                    value={profileDraft.avatarId}
+                    onChange={(event) => updateProfileDraft((current) => ({ ...current, avatarId: event.target.value as PlayerProfile['avatarId'] }))}
+                  >
+                    {AVATAR_OPTIONS.map((avatar) => {
+                      const rarity = itemRarity('avatar', avatar)
+                      const cost = itemCost('avatar', avatar)
+                      const locked = isLocked('avatar', avatar)
+                      return (
+                        <option key={avatar} value={avatar} disabled={locked}>
+                          {locked
+                            ? `${AVATAR_LABELS[avatar]} (${RARITY_LABELS[rarity]} ${cost} pts, locked)`
+                            : `${AVATAR_LABELS[avatar]} (${RARITY_LABELS[rarity]})`}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </div>
+
+                <div className="row">
+                  <label htmlFor="setup-hat">Kepure</label>
+                  <select
+                    id="setup-hat"
+                    value={profileDraft.hatId}
+                    onChange={(event) => updateProfileDraft((current) => ({ ...current, hatId: event.target.value as PlayerProfile['hatId'] }))}
+                  >
+                    {HAT_OPTIONS.map((hat) => {
+                      const rarity = itemRarity('hat', hat)
+                      const cost = itemCost('hat', hat)
+                      const locked = isLocked('hat', hat)
+                      return (
+                        <option key={hat} value={hat} disabled={locked}>
+                          {locked
+                            ? `${HAT_LABELS[hat]} (${RARITY_LABELS[rarity]} ${cost} pts, locked)`
+                            : `${HAT_LABELS[hat]} (${RARITY_LABELS[rarity]})`}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </div>
+
+                <div className="row">
+                  <label htmlFor="setup-skin">Skin</label>
+                  <select
+                    id="setup-skin"
+                    value={profileDraft.skinId}
+                    onChange={(event) => updateProfileDraft((current) => ({ ...current, skinId: event.target.value as PlayerProfile['skinId'] }))}
+                  >
+                    {SKIN_OPTIONS.map((skin) => {
+                      const rarity = itemRarity('skin', skin)
+                      const cost = itemCost('skin', skin)
+                      const locked = isLocked('skin', skin)
+                      return (
+                        <option key={skin} value={skin} disabled={locked}>
+                          {locked
+                            ? `${SKIN_LABELS[skin]} (${RARITY_LABELS[rarity]} ${cost} pts, locked)`
+                            : `${SKIN_LABELS[skin]} (${RARITY_LABELS[rarity]})`}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </div>
+
+                <div className="row">
+                  <label htmlFor="setup-effect">Efektas</label>
+                  <select
+                    id="setup-effect"
+                    value={profileDraft.effectId}
+                    onChange={(event) => updateProfileDraft((current) => ({ ...current, effectId: event.target.value as PlayerProfile['effectId'] }))}
+                  >
+                    {EFFECT_OPTIONS.map((effect) => {
+                      const rarity = itemRarity('effect', effect)
+                      const cost = itemCost('effect', effect)
+                      const locked = isLocked('effect', effect)
+                      return (
+                        <option key={effect} value={effect} disabled={locked}>
+                          {locked
+                            ? `${EFFECT_LABELS[effect]} (${RARITY_LABELS[rarity]} ${cost} pts, locked)`
+                            : `${EFFECT_LABELS[effect]} (${RARITY_LABELS[rarity]})`}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </div>
+              </div>
+
+              <div className="shopPanel" aria-label="Marketplace preview panel">
+                <div className="shopPanelHeader">
+                  <strong>Marketplace preview</strong>
+                  <span>Taskai: {account.points} | Zaidimai: {account.gamesPlayed}</span>
+                </div>
+                <p className="shopPanelHint">Siame bloke jau naudosime tas pacias kosmetikas, kurios veliau persikels i atskira marketplace puslapi.</p>
+
+                {SHOP_SECTION_ORDER.map((sectionType) => (
+                  <div key={sectionType} className="shopSection">
+                    <h4>{SHOP_SECTION_LABELS[sectionType]}</h4>
+                    <div className="shopItemsGrid">
+                      {shopByType[sectionType].length === 0 ? (
+                        <span className="shopLoadingHint">Katalogas kraunamas...</span>
+                      ) : null}
+                      {shopByType[sectionType].map((item) => {
+                        const owned = itemOwned(item.type, String(item.id))
+                        const label = SHOP_ITEM_LABELS[item.type][String(item.id)] ?? String(item.id)
+
+                        return (
+                          <article key={`${item.type}:${String(item.id)}`} className={`shopItemCard rarity-${item.rarity} ${owned ? 'owned' : 'locked'}`}>
+                            <div className="shopItemTop">
+                              <strong>{label}</strong>
+                              <span className="shopRarityChip">{RARITY_LABELS[item.rarity]}</span>
+                            </div>
+                            <div className="shopItemMeta">
+                              <span>{item.cost} pts</span>
+                              <span>{owned ? 'Owned' : 'Locked'}</span>
+                            </div>
+                          </article>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="colorPickerRow">
+                <span>Pagrindine spalva</span>
+                <div className="colorSwatches">
+                  {PROFILE_COLOR_OPTIONS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className={profileDraft.baseColor === color ? 'colorSwatch active' : 'colorSwatch'}
+                      style={{ backgroundColor: color }}
+                      onClick={() => updateProfileDraft((current) => ({ ...current, baseColor: color }))}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="customizationFooter">
+            <button type="button" onClick={resetProfileDraft}>Atstatyti aktyvu lizda</button>
+            <button type="button" onClick={() => { void completeProfileSetup() }}>Testi i zaidimo centra</button>
+          </div>
+          {error ? <div className="error">{error}</div> : null}
+        </section>
+      </div>
+    )
+  }
+
   return (
     <div className="page">
       <header>
@@ -1483,6 +2166,9 @@ function App() {
           <button disabled={!roomCode} onClick={startGame}>
             Pradeti zaidima
           </button>
+          <button type="button" onClick={() => setShowMarketplaceWindow(true)}>
+            Marketplace
+          </button>
         </div>
 
         <div className={`profileQuickPanel quick-effect-${profilePanelProfile.effectId}`}>
@@ -1490,10 +2176,11 @@ function App() {
             <strong>Profilio langelis</strong>
             <span>Slotas {activeProfileSlot} | Taskai {account.points} | Zaidimai {account.gamesPlayed}</span>
           </div>
-          {renderProfileBadge(profilePanelProfile, true, name || me?.name)}
+          {renderProfileBadge(profilePanelProfile, true, profilePanelDisplayName)}
           <div className="actions">
             <button type="button" onClick={() => setShowProfileWindow(true)}>Atidaryti profilio langeli</button>
-            <button type="button" onClick={saveProfile}>Issaugoti ir pritaikyti</button>
+            <button type="button" onClick={() => { void saveProfile() }}>Issaugoti ir pritaikyti</button>
+            <button type="button" onClick={() => setShowMarketplaceWindow(true)}>Marketplace</button>
           </div>
         </div>
 
@@ -1550,6 +2237,28 @@ function App() {
                 </div>
 
                 <div className="customizationGrid">
+                  <div className="row">
+                    <label htmlFor="card-background">Korteles fonas</label>
+                    <select
+                      id="card-background"
+                      value={profileDraft.cardBackgroundId}
+                      onChange={(event) => updateProfileDraft((current) => ({ ...current, cardBackgroundId: event.target.value as PlayerProfile['cardBackgroundId'] }))}
+                    >
+                      {CARD_BACKGROUND_OPTIONS.map((background) => {
+                        const rarity = itemRarity('background', background)
+                        const cost = itemCost('background', background)
+                        const locked = isLocked('background', background)
+                        return (
+                          <option key={background} value={background} disabled={locked}>
+                            {locked
+                              ? `${CARD_BACKGROUND_LABELS[background]} (${RARITY_LABELS[rarity]} ${cost} pts, locked)`
+                              : `${CARD_BACKGROUND_LABELS[background]} (${RARITY_LABELS[rarity]})`}
+                          </option>
+                        )
+                      })}
+                    </select>
+                  </div>
+
                   <div className="row">
                     <label htmlFor="avatar">Veikejas</label>
                     <select
@@ -1644,7 +2353,7 @@ function App() {
                     <strong>Shop</strong>
                     <span>Taskai: {account.points} | Zaidimai: {account.gamesPlayed}</span>
                   </div>
-                  <p className="shopPanelHint">Kiekvienas match: +20 tasku visiems, Top3 bonusai: +20 / +10 / +5.</p>
+                  <p className="shopPanelHint">Kiekvienas match: +200 tasku visiems, Top3 bonusai: +200 / +100 / +50.</p>
 
                   {SHOP_SECTION_ORDER.map((sectionType) => (
                     <div key={sectionType} className="shopSection">
@@ -1704,7 +2413,29 @@ function App() {
 
             <div className="customizationFooter">
               <button type="button" onClick={resetProfileDraft}>Atstatyti aktyvu lizda</button>
-              <button type="button" onClick={saveProfile}>Issaugoti ir pritaikyti</button>
+              <button type="button" onClick={() => { void saveProfile() }}>Issaugoti ir pritaikyti</button>
+            </div>
+          </article>
+        </section>
+      ) : null}
+
+      {showMarketplaceWindow ? (
+        <section className="profileWindowOverlay" role="dialog" aria-modal="true" aria-label="Marketplace">
+          <article className={`profileWindow panel marketplaceWindow window-effect-${profileDraft.effectId}`}>
+            <div className="profileWindowHeader">
+              <h2>Marketplace</h2>
+              <button type="button" onClick={() => setShowMarketplaceWindow(false)}>Uzdaryti</button>
+            </div>
+
+            <div className="profileWindowBody marketplaceBody">
+              <div className="loadoutStage">
+                {renderProfileBadge(profilePanelProfile, true, profilePanelDisplayName)}
+                <p>Is cia gali pirkti avatarus, kepures, skinus ir efektus uz savo taskus.</p>
+              </div>
+
+              <div className="customizationPanel">
+                {renderMarketplacePanel('Marketplace', 'Kiekvienas match: +200 tasku visiems, Top3 bonusai: +200 / +100 / +50.')}
+              </div>
             </div>
           </article>
         </section>
@@ -1795,8 +2526,15 @@ function App() {
                         key={`playing-dock-${card.rank}${card.suit}-${index}`}
                         type="button"
                         className="playingActionCardPick"
-                        disabled={!isMyTurn}
-                        onClick={() => sendAction({ type: 'PLAY_CARD', cardIndex: index })}
+                        disabled={!isMyTurn || Boolean(flyingPlayedCard)}
+                        onClick={(event) => handlePlayCardWithSlide(index, card, event.currentTarget)}
+                        ref={(element) => {
+                          if (!element) {
+                            playingCardButtonRefs.current.delete(index)
+                            return
+                          }
+                          playingCardButtonRefs.current.set(index, element)
+                        }}
                         title={`Zaisti ${cardLabel(card)}`}
                       >
                         {renderVisualCard(card, true)}
@@ -1814,6 +2552,7 @@ function App() {
               ) : null}
 
               <div
+                ref={centerDropRef}
                 className={
                   payload.state.phase === 'DEALING'
                     ? 'roundTableCenter dealingCenter'
@@ -1856,9 +2595,48 @@ function App() {
                 ) : null}
               </div>
 
+              {flyingPlayedCard ? (
+                <div
+                  className="flyingPlayedCard"
+                  style={{
+                    '--fly-from-x': `${flyingPlayedCard.fromX}px`,
+                    '--fly-from-y': `${flyingPlayedCard.fromY}px`,
+                    '--fly-to-x': `${flyingPlayedCard.toX}px`,
+                    '--fly-to-y': `${flyingPlayedCard.toY}px`,
+                    '--fly-width': `${flyingPlayedCard.width}px`,
+                    '--fly-height': `${flyingPlayedCard.height}px`,
+                  } as CSSProperties}
+                >
+                  {renderVisualCard(flyingPlayedCard.card, true)}
+                </div>
+              ) : null}
+
+              {flyingRevealedCard ? (
+                <div
+                  className="flyingRevealedCard"
+                  style={{
+                    '--fly-from-x': `${flyingRevealedCard.fromX}px`,
+                    '--fly-from-y': `${flyingRevealedCard.fromY}px`,
+                    '--fly-to-x': `${flyingRevealedCard.toX}px`,
+                    '--fly-to-y': `${flyingRevealedCard.toY}px`,
+                    '--fly-width': `${flyingRevealedCard.width}px`,
+                    '--fly-height': `${flyingRevealedCard.height}px`,
+                  } as CSSProperties}
+                >
+                  {renderVisualCard(flyingRevealedCard.card)}
+                </div>
+              ) : null}
+
               {tableSeats.map((seat) => (
                 <div
                   key={seat.id}
+                  ref={(element) => {
+                    if (!element) {
+                      tableSeatRefs.current.delete(seat.id)
+                      return
+                    }
+                    tableSeatRefs.current.set(seat.id, element)
+                  }}
                   className={
                     draggedCardIndex !== null && payload.state.phase === 'DEALING' && isMyTurn
                       ? seat.isMe
@@ -1974,6 +2752,12 @@ function App() {
                       className={canDrag ? 'draggableCard' : 'draggableCard disabled'}
                       onDragStart={() => handleHandCardDragStart(i)}
                       onDragEnd={handleHandCardDragEnd}
+                      onClick={(event) => {
+                        if (payload.state.phase !== 'PLAYING') {
+                          return
+                        }
+                        handlePlayCardWithSlide(i, c, event.currentTarget)
+                      }}
                     >
                       {renderVisualCard(c)}
                     </div>
@@ -2026,6 +2810,10 @@ function App() {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            <div className="resultsActions">
+              <button type="button" onClick={returnToMainMenu}>Grizti i main menu</button>
             </div>
           </article>
         </section>

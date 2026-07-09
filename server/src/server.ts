@@ -8,13 +8,24 @@ import Datastore from "nedb-promises";
 import { Server } from "socket.io";
 import { z } from "zod";
 import {
+  AVATAR_PRICE_OVERRIDES,
+  AVATAR_RARITY,
   AVATAR_OPTIONS,
+  CARD_BACKGROUND_OPTIONS,
+  CARD_BACKGROUND_RARITY,
+  EFFECT_RARITY,
   EFFECT_OPTIONS,
+  HAT_RARITY,
   HAT_OPTIONS,
   PROFILE_COLOR_OPTIONS,
   PROFILE_SLOT_OPTIONS,
+  RARITY_PRICES,
+  SKIN_RARITY,
   SKIN_OPTIONS,
+  type AuthBootstrapPayload,
+  type PlayerAccountState,
   type PlayerProfile,
+  type ProfileSlotMap,
   type ShopItemId,
   type ShopItemType,
   type TurnAction,
@@ -38,6 +49,10 @@ type AuthUser = {
   email: string;
   playerName: string;
   passwordHash: string;
+  hasCompletedProfileSetup: boolean;
+  activeProfileSlot: PlayerProfile["profileSlot"];
+  profileSlots: ProfileSlotMap;
+  account: PlayerAccountState;
   resetTokenHash: string | null;
   resetTokenExpiresAt: number | null;
   createdAt: number;
@@ -59,6 +74,33 @@ const forgotPasswordSchema = z.object({
   email: z.string().trim().email().max(120),
 });
 
+const profileSchema = z.object({
+  baseColor: z.enum(PROFILE_COLOR_OPTIONS),
+  avatarId: z.enum(AVATAR_OPTIONS),
+  hatId: z.enum(HAT_OPTIONS),
+  skinId: z.enum(SKIN_OPTIONS),
+  effectId: z.enum(EFFECT_OPTIONS),
+  cardBackgroundId: z.enum(CARD_BACKGROUND_OPTIONS),
+  profileSlot: z.enum(PROFILE_SLOT_OPTIONS),
+});
+
+const bootstrapSchema = z.object({
+  email: z.string().trim().email().max(120),
+});
+
+const saveProfileSchema = z.object({
+  email: z.string().trim().email().max(120),
+  activeProfileSlot: z.enum(PROFILE_SLOT_OPTIONS),
+  profile: profileSchema,
+  completeSetup: z.boolean().optional(),
+});
+
+const authPurchaseSchema = z.object({
+  email: z.string().trim().email().max(120),
+  itemType: z.enum(["avatar", "hat", "skin", "effect", "background"]),
+  itemId: z.string().trim().min(1),
+});
+
 const resetPasswordSchema = z.object({
   token: z.string().trim().min(20).max(256),
   password: z.string().min(8).max(128),
@@ -73,6 +115,141 @@ void authUsersDb.ensureIndex({ fieldName: "email", unique: true });
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+function createDefaultProfile(slot: PlayerProfile["profileSlot"] = PROFILE_SLOT_OPTIONS[0]): PlayerProfile {
+  const slotIndex = PROFILE_SLOT_OPTIONS.findIndex((item) => item === slot);
+  const normalizedIndex = Math.max(0, slotIndex);
+  return {
+    baseColor: PROFILE_COLOR_OPTIONS[normalizedIndex % PROFILE_COLOR_OPTIONS.length],
+    avatarId: "warrior",
+    hatId: "none",
+    skinId: "default",
+    effectId: "none",
+    cardBackgroundId: "classic",
+    profileSlot: slot,
+  };
+}
+
+function normalizeProfile(profile: PlayerProfile, slot: PlayerProfile["profileSlot"]): PlayerProfile {
+  return {
+    ...createDefaultProfile(slot),
+    ...profile,
+    profileSlot: slot,
+    cardBackgroundId: CARD_BACKGROUND_OPTIONS.includes(profile.cardBackgroundId)
+      ? profile.cardBackgroundId
+      : "classic",
+  };
+}
+
+function normalizeProfileSlots(profileSlots: ProfileSlotMap | undefined): ProfileSlotMap {
+  const fallback = createDefaultProfileSlots();
+  if (!profileSlots) {
+    return fallback;
+  }
+
+  return {
+    A: normalizeProfile(profileSlots.A ?? fallback.A, "A"),
+    B: normalizeProfile(profileSlots.B ?? fallback.B, "B"),
+    C: normalizeProfile(profileSlots.C ?? fallback.C, "C"),
+  };
+}
+
+function createDefaultProfileSlots(): ProfileSlotMap {
+  return {
+    A: createDefaultProfile("A"),
+    B: createDefaultProfile("B"),
+    C: createDefaultProfile("C"),
+  };
+}
+
+function createDefaultAccount(): PlayerAccountState {
+  const defaultAvatars = AVATAR_OPTIONS.filter((id) => AVATAR_RARITY[id] === "common");
+  const defaultBackgrounds = CARD_BACKGROUND_OPTIONS.filter((id) => CARD_BACKGROUND_RARITY[id] === "common");
+
+  return {
+    points: 0,
+    gamesPlayed: 0,
+    unlocked: {
+      avatars: defaultAvatars,
+      hats: HAT_OPTIONS.filter((id) => HAT_RARITY[id] === "common"),
+      skins: SKIN_OPTIONS.filter((id) => SKIN_RARITY[id] === "common"),
+      effects: EFFECT_OPTIONS.filter((id) => EFFECT_RARITY[id] === "common"),
+      backgrounds: defaultBackgrounds,
+    },
+  };
+}
+
+function normalizeAccount(account: PlayerAccountState | undefined): PlayerAccountState {
+  const fallback = createDefaultAccount();
+  if (!account) {
+    return fallback;
+  }
+
+  return {
+    points: account.points ?? 0,
+    gamesPlayed: account.gamesPlayed ?? 0,
+    unlocked: {
+      avatars: account.unlocked?.avatars ?? fallback.unlocked.avatars,
+      hats: account.unlocked?.hats ?? fallback.unlocked.hats,
+      skins: account.unlocked?.skins ?? fallback.unlocked.skins,
+      effects: account.unlocked?.effects ?? fallback.unlocked.effects,
+      backgrounds: account.unlocked?.backgrounds ?? fallback.unlocked.backgrounds,
+    },
+  };
+}
+
+function toBootstrapPayload(user: AuthUser): AuthBootstrapPayload {
+  return {
+    email: user.email,
+    playerName: user.playerName,
+    hasCompletedProfileSetup: user.hasCompletedProfileSetup,
+    activeProfileSlot: user.activeProfileSlot,
+    profileSlots: user.profileSlots,
+    account: user.account,
+  };
+}
+
+async function hydrateAuthUser(user: AuthUser): Promise<AuthUser> {
+  const nextProfileSlots = normalizeProfileSlots(user.profileSlots);
+  const nextActiveProfileSlot = user.activeProfileSlot ?? PROFILE_SLOT_OPTIONS[0];
+  const nextAccount = normalizeAccount(user.account);
+  const nextHasCompletedProfileSetup = user.hasCompletedProfileSetup ?? false;
+
+  const needsUpdate =
+    user.profileSlots === undefined ||
+    user.activeProfileSlot === undefined ||
+    user.account === undefined ||
+    user.account.unlocked?.backgrounds === undefined ||
+    user.hasCompletedProfileSetup === undefined;
+
+  if (!needsUpdate) {
+    return user;
+  }
+
+  const hydratedUser: AuthUser = {
+    ...user,
+    profileSlots: nextProfileSlots,
+    activeProfileSlot: nextActiveProfileSlot,
+    account: nextAccount,
+    hasCompletedProfileSetup: nextHasCompletedProfileSetup,
+    updatedAt: Date.now(),
+  };
+
+  await authUsersDb.update(
+    { id: user.id },
+    {
+      $set: {
+        profileSlots: hydratedUser.profileSlots,
+        activeProfileSlot: hydratedUser.activeProfileSlot,
+        account: hydratedUser.account,
+        hasCompletedProfileSetup: hydratedUser.hasCompletedProfileSetup,
+        updatedAt: hydratedUser.updatedAt,
+      },
+    },
+  );
+
+  return hydratedUser;
 }
 
 function hashToken(raw: string): string {
@@ -117,6 +294,10 @@ app.post("/auth/register", async (req, res) => {
       email,
       playerName,
       passwordHash: hashPassword(parsed.password),
+      hasCompletedProfileSetup: false,
+      activeProfileSlot: PROFILE_SLOT_OPTIONS[0],
+      profileSlots: createDefaultProfileSlots(),
+      account: createDefaultAccount(),
       resetTokenHash: null,
       resetTokenExpiresAt: null,
       createdAt: now,
@@ -139,14 +320,83 @@ app.post("/auth/login", async (req, res) => {
   try {
     const parsed = loginSchema.parse(req.body);
     const email = normalizeEmail(parsed.email);
-    const user = await authUsersDb.findOne({ email });
+    const storedUser = await authUsersDb.findOne({ email });
 
-    if (!user || !verifyPassword(parsed.password, user.passwordHash)) {
+    if (!storedUser || !verifyPassword(parsed.password, storedUser.passwordHash)) {
       res.status(401).json({ ok: false, error: "Neteisingas el. pastas arba slaptazodis" });
       return;
     }
 
-    res.json({ ok: true, email: user.email, playerName: user.playerName });
+    const user = await hydrateAuthUser(storedUser);
+
+    res.json({ ok: true, ...toBootstrapPayload(user) });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.post("/auth/bootstrap", async (req, res) => {
+  try {
+    const parsed = bootstrapSchema.parse(req.body);
+    const email = normalizeEmail(parsed.email);
+    const storedUser = await authUsersDb.findOne({ email });
+
+    if (!storedUser) {
+      res.status(404).json({ ok: false, error: "Vartotojas nerastas" });
+      return;
+    }
+
+    const user = await hydrateAuthUser(storedUser);
+
+    res.json({ ok: true, ...toBootstrapPayload(user) });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+app.post("/auth/profile", async (req, res) => {
+  try {
+    const parsed = saveProfileSchema.parse(req.body);
+    const email = normalizeEmail(parsed.email);
+    const storedUser = await authUsersDb.findOne({ email });
+
+    if (!storedUser) {
+      res.status(404).json({ ok: false, error: "Vartotojas nerastas" });
+      return;
+    }
+
+    const user = await hydrateAuthUser(storedUser);
+    const activeProfileSlot = parsed.activeProfileSlot;
+    const nextProfile = normalizeProfile({ ...parsed.profile, profileSlot: activeProfileSlot }, activeProfileSlot);
+    const nextProfileSlots: ProfileSlotMap = {
+      ...user.profileSlots,
+      [activeProfileSlot]: nextProfile,
+    };
+    const hasCompletedProfileSetup = parsed.completeSetup ? true : user.hasCompletedProfileSetup;
+    const updatedAt = Date.now();
+
+    await authUsersDb.update(
+      { id: user.id },
+      {
+        $set: {
+          profileSlots: nextProfileSlots,
+          activeProfileSlot,
+          hasCompletedProfileSetup,
+          updatedAt,
+        },
+      },
+    );
+
+    res.json({
+      ok: true,
+      ...toBootstrapPayload({
+        ...user,
+        profileSlots: nextProfileSlots,
+        activeProfileSlot,
+        hasCompletedProfileSetup,
+        updatedAt,
+      }),
+    });
   } catch (error) {
     res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
   }
@@ -229,15 +479,6 @@ const io = new Server(httpServer, {
 
 const engine = new GameEngine();
 
-const profileSchema = z.object({
-  baseColor: z.enum(PROFILE_COLOR_OPTIONS),
-  avatarId: z.enum(AVATAR_OPTIONS),
-  hatId: z.enum(HAT_OPTIONS),
-  skinId: z.enum(SKIN_OPTIONS),
-  effectId: z.enum(EFFECT_OPTIONS),
-  profileSlot: z.enum(PROFILE_SLOT_OPTIONS),
-});
-
 const createRoomSchema = z.object({
   name: z.string().trim().min(1).max(24),
   profile: profileSchema.optional(),
@@ -255,8 +496,131 @@ const updateProfileSchema = z.object({
 });
 
 const purchaseItemSchema = z.object({
-  itemType: z.enum(["avatar", "hat", "skin", "effect"]),
+  itemType: z.enum(["avatar", "hat", "skin", "effect", "background"]),
   itemId: z.string().trim().min(1),
+});
+
+function isValidShopItem(type: ShopItemType, itemId: ShopItemId): boolean {
+  if (type === "avatar") {
+    return AVATAR_OPTIONS.includes(itemId as PlayerProfile["avatarId"]);
+  }
+  if (type === "hat") {
+    return HAT_OPTIONS.includes(itemId as PlayerProfile["hatId"]);
+  }
+  if (type === "skin") {
+    return SKIN_OPTIONS.includes(itemId as PlayerProfile["skinId"]);
+  }
+  if (type === "effect") {
+    return EFFECT_OPTIONS.includes(itemId as PlayerProfile["effectId"]);
+  }
+  return CARD_BACKGROUND_OPTIONS.includes(itemId as PlayerProfile["cardBackgroundId"]);
+}
+
+function resolveItemCost(type: ShopItemType, itemId: ShopItemId): number {
+  if (type === "avatar") {
+    const override = AVATAR_PRICE_OVERRIDES[itemId as PlayerProfile["avatarId"]];
+    if (typeof override === "number") {
+      return override;
+    }
+    return RARITY_PRICES[AVATAR_RARITY[itemId as PlayerProfile["avatarId"]]];
+  }
+  if (type === "hat") {
+    return RARITY_PRICES[HAT_RARITY[itemId as PlayerProfile["hatId"]]];
+  }
+  if (type === "skin") {
+    return RARITY_PRICES[SKIN_RARITY[itemId as PlayerProfile["skinId"]]];
+  }
+  if (type === "effect") {
+    return RARITY_PRICES[EFFECT_RARITY[itemId as PlayerProfile["effectId"]]];
+  }
+  return RARITY_PRICES[CARD_BACKGROUND_RARITY[itemId as PlayerProfile["cardBackgroundId"]]];
+}
+
+function isItemUnlocked(account: PlayerAccountState, type: ShopItemType, itemId: ShopItemId): boolean {
+  if (type === "avatar") {
+    return account.unlocked.avatars.includes(itemId as PlayerProfile["avatarId"]);
+  }
+  if (type === "hat") {
+    return account.unlocked.hats.includes(itemId as PlayerProfile["hatId"]);
+  }
+  if (type === "skin") {
+    return account.unlocked.skins.includes(itemId as PlayerProfile["skinId"]);
+  }
+  if (type === "effect") {
+    return account.unlocked.effects.includes(itemId as PlayerProfile["effectId"]);
+  }
+  return account.unlocked.backgrounds.includes(itemId as PlayerProfile["cardBackgroundId"]);
+}
+
+function unlockItem(account: PlayerAccountState, type: ShopItemType, itemId: ShopItemId): void {
+  if (type === "avatar") {
+    account.unlocked.avatars.push(itemId as PlayerProfile["avatarId"]);
+    return;
+  }
+  if (type === "hat") {
+    account.unlocked.hats.push(itemId as PlayerProfile["hatId"]);
+    return;
+  }
+  if (type === "skin") {
+    account.unlocked.skins.push(itemId as PlayerProfile["skinId"]);
+    return;
+  }
+  if (type === "effect") {
+    account.unlocked.effects.push(itemId as PlayerProfile["effectId"]);
+    return;
+  }
+  account.unlocked.backgrounds.push(itemId as PlayerProfile["cardBackgroundId"]);
+}
+
+app.post("/auth/purchase", async (req, res) => {
+  try {
+    const parsed = authPurchaseSchema.parse(req.body);
+    const email = normalizeEmail(parsed.email);
+    const itemType = parsed.itemType as ShopItemType;
+    const itemId = parsed.itemId as ShopItemId;
+    const storedUser = await authUsersDb.findOne({ email });
+
+    if (!storedUser) {
+      res.status(404).json({ ok: false, error: "Vartotojas nerastas" });
+      return;
+    }
+
+    const user = await hydrateAuthUser(storedUser);
+    if (!isValidShopItem(itemType, itemId)) {
+      res.status(400).json({ ok: false, error: "Neteisingas shop elementas" });
+      return;
+    }
+
+    const account = normalizeAccount(user.account);
+    if (isItemUnlocked(account, itemType, itemId)) {
+      res.status(409).json({ ok: false, error: "Elementas jau atrakintas" });
+      return;
+    }
+
+    const cost = resolveItemCost(itemType, itemId);
+    if (account.points < cost) {
+      res.status(400).json({ ok: false, error: "Truksta tasku" });
+      return;
+    }
+
+    account.points -= cost;
+    unlockItem(account, itemType, itemId);
+    const updatedAt = Date.now();
+
+    await authUsersDb.update(
+      { id: user.id },
+      {
+        $set: {
+          account,
+          updatedAt,
+        },
+      },
+    );
+
+    res.json({ ok: true, account });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+  }
 });
 
 function emitRoomState(roomCode: string): void {

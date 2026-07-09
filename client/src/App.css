@@ -775,11 +775,76 @@ button:disabled {
   margin: 0;
 }
 
+.profileSetupPage {
+  align-items: stretch;
+}
+
+.profileSetupPanel {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+
+.profileSetupHeader {
+  align-items: start;
+}
+
+.profileSetupHeader h1 {
+  margin: 0;
+}
+
+.profileSetupHeader p {
+  margin: 6px 0 0;
+  max-width: 520px;
+  color: #a8cbdf;
+}
+
+.profileSetupMeta {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+  text-align: right;
+}
+
+.profileSetupMeta span {
+  font-size: 12px;
+  color: #c8e9ff;
+}
+
 .profileWindowBody {
   display: grid;
   grid-template-columns: minmax(220px, 300px) 1fr;
   gap: 12px;
   align-items: start;
+}
+
+.marketplaceBody {
+  grid-template-columns: minmax(220px, 280px) 1fr;
+  background:
+    linear-gradient(160deg, rgba(10, 22, 36, 0.28), rgba(9, 18, 32, 0.34)),
+    url('./assets/marketplace_background.png');
+  background-size: auto, contain;
+  background-position: center, center;
+  background-repeat: repeat, no-repeat;
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.marketplaceWindow {
+  background:
+    linear-gradient(165deg, rgba(9, 18, 34, 0.3), rgba(12, 20, 37, 0.42)),
+    url('./assets/marketplace_background.png') center/contain no-repeat !important;
+}
+
+.marketplaceBody .loadoutStage {
+  background: linear-gradient(140deg, rgba(13, 32, 49, 0.46), rgba(10, 24, 39, 0.52));
+  border-color: rgba(141, 194, 238, 0.72);
+}
+
+.marketplaceBody .shopPanel {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(139, 232, 255, 0.12), transparent 36%),
+    linear-gradient(180deg, rgba(13, 33, 54, 0.62), rgba(8, 22, 38, 0.7));
+  border-color: rgba(176, 212, 255, 0.66);
 }
 
 .loadoutStage {
@@ -789,6 +854,13 @@ button:disabled {
   padding: 10px;
   display: grid;
   gap: 8px;
+  position: sticky;
+  top: 10px;
+  align-self: start;
+}
+
+.loadoutStage .profileBadge {
+  position: static;
 }
 
 .loadoutStage p {
@@ -817,6 +889,17 @@ button:disabled {
     linear-gradient(180deg, rgba(17, 41, 67, 0.9), rgba(11, 28, 48, 0.94));
   display: grid;
   gap: 10px;
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  color: #eef7ff !important;
+}
+
+.shopPanel strong,
+.shopPanel h4,
+.shopPanel span,
+.shopPanel button,
+.shopPanel p {
+  font-family: inherit;
+  color: inherit;
 }
 
 .shopPanelHeader {
@@ -835,6 +918,16 @@ button:disabled {
   margin: 0;
   font-size: 12px;
   color: #9fc8e8;
+}
+
+.shopPanelError {
+  margin: 0;
+  font-size: 12px;
+  color: #ffd3d3 !important;
+  background: rgba(132, 25, 25, 0.42);
+  border: 1px solid rgba(255, 170, 170, 0.5);
+  border-radius: 8px;
+  padding: 6px 8px;
 }
 
 .shopSection {
@@ -2489,6 +2582,55 @@ button:disabled {
   font-size: 11px;
 }
 
+.flyingPlayedCard {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: var(--fly-width);
+  height: var(--fly-height);
+  transform: translate(var(--fly-from-x), var(--fly-from-y));
+  animation: flyPlayedCardToCenter 330ms cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
+  pointer-events: none;
+  z-index: 130;
+}
+
+.flyingPlayedCard .playingCard,
+.flyingPlayedCard .playingCard.compact {
+  width: 100%;
+  height: 100%;
+  animation: none;
+}
+
+.flyingRevealedCard {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: var(--fly-width);
+  height: var(--fly-height);
+  transform: translate(var(--fly-from-x), var(--fly-from-y));
+  animation: flyPlayedCardToCenter 330ms cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.flyingRevealedCard .playingCard,
+.flyingRevealedCard .playingCard.compact {
+  width: 100%;
+  height: 100%;
+  animation: none;
+}
+
+@keyframes flyPlayedCardToCenter {
+  0% {
+    transform: translate(var(--fly-from-x), var(--fly-from-y)) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--fly-to-x), var(--fly-to-y)) scale(0.95);
+    opacity: 0.88;
+  }
+}
+
 .playingCard .top {
   left: 6px;
   top: 5px;
@@ -2669,6 +2811,12 @@ button:disabled {
 
 .resultsTable .winnerRow td {
   background: rgba(242, 201, 95, 0.12);
+}
+
+.resultsActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
 }
 
 .tableWindowOverlay {
@@ -3087,7 +3235,7 @@ button:disabled {
   justify-items: center;
   text-align: center;
   box-shadow: none;
-  z-index: 2;
+  z-index: auto;
 }
 
 .tableSeat.me {
@@ -3500,6 +3648,14 @@ button:disabled {
 
   .loadoutStage p {
     font-size: 11px;
+  }
+
+  .loadoutStage .profileBadge {
+    position: static;
+  }
+
+  .loadoutStage {
+    position: static;
   }
 }
 
@@ -5130,6 +5286,90 @@ header h1,
   z-index: 0;
 }
 
+.profileBadge.bg-classic {
+  background:
+    radial-gradient(circle at 84% 14%, #7f1d1d 0%, #4c1d14 36%, #2c1410 100%),
+    linear-gradient(165deg, #2c1410 0%, #1a0f0b 52%, #130907 100%),
+    repeating-linear-gradient(45deg, #3b1e16 0 2px, #2b150f 2px 8px) !important;
+}
+
+.profileBadge.bg-crimson {
+  background:
+    radial-gradient(circle at 16% 14%, rgba(255, 84, 84, 0.34), transparent 34%),
+    radial-gradient(circle at 82% 18%, rgba(255, 206, 126, 0.22), transparent 32%),
+    linear-gradient(165deg, #3a110e 0%, #260f0d 46%, #14080b 100%),
+    repeating-linear-gradient(36deg, rgba(255, 223, 147, 0.09) 0 2px, transparent 2px 9px) !important;
+}
+
+.profileBadge.bg-emerald {
+  background:
+    radial-gradient(circle at 18% 14%, rgba(121, 255, 177, 0.3), transparent 34%),
+    radial-gradient(circle at 84% 72%, rgba(214, 255, 161, 0.16), transparent 36%),
+    linear-gradient(165deg, #0f261b 0%, #0c1b17 48%, #0a120f 100%),
+    repeating-linear-gradient(38deg, rgba(179, 248, 199, 0.08) 0 2px, transparent 2px 8px) !important;
+}
+
+.profileBadge.bg-midnight {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(118, 164, 255, 0.28), transparent 34%),
+    radial-gradient(circle at 82% 18%, rgba(170, 213, 255, 0.16), transparent 30%),
+    linear-gradient(165deg, #101727 0%, #0d1120 50%, #090d16 100%),
+    repeating-linear-gradient(45deg, rgba(171, 205, 255, 0.06) 0 2px, transparent 2px 9px) !important;
+}
+
+.profileBadge.bg-parchment {
+  color: #2f1d12;
+  background:
+    radial-gradient(circle at 84% 14%, rgba(255, 232, 173, 0.4), transparent 34%),
+    radial-gradient(circle at 18% 78%, rgba(216, 173, 121, 0.18), transparent 36%),
+    linear-gradient(165deg, #d8c39e 0%, #b9976e 52%, #97714d 100%),
+    repeating-linear-gradient(45deg, rgba(117, 75, 36, 0.08) 0 2px, transparent 2px 8px) !important;
+  box-shadow:
+    0 12px 24px rgba(44, 24, 8, 0.24),
+    0 0 18px rgba(255, 219, 152, 0.18),
+    inset 0 0 0 1px rgba(255, 243, 209, 0.5) !important;
+}
+
+.profileBadge.bg-classic .profileCardStage,
+.profileBadge.bg-crimson .profileCardStage,
+.profileBadge.bg-emerald .profileCardStage,
+.profileBadge.bg-midnight .profileCardStage,
+.profileBadge.bg-parchment .profileCardStage {
+  background:
+    linear-gradient(180deg, rgba(43, 18, 16, 0.9), rgba(21, 10, 8, 0.94)),
+    radial-gradient(circle at 18% 16%, rgba(255, 117, 85, 0.16), transparent 44%),
+    radial-gradient(circle at 82% 18%, rgba(255, 196, 110, 0.12), transparent 46%) !important;
+}
+
+.profileBadge.bg-classic .profileCardStage {
+  background:
+    linear-gradient(180deg, #3a1712, #23100b),
+    radial-gradient(circle at 18% 16%, #7d2f1f 0%, #4f1f15 44%, #2e140e 100%),
+    radial-gradient(circle at 82% 18%, #8b5422 0%, #5e3719 46%, #2e170c 100%) !important;
+}
+
+.profileBadge.bg-emerald .profileCardStage {
+  background:
+    linear-gradient(180deg, rgba(12, 37, 28, 0.9), rgba(8, 22, 17, 0.94)),
+    radial-gradient(circle at 18% 16%, rgba(140, 255, 182, 0.18), transparent 44%),
+    radial-gradient(circle at 82% 18%, rgba(242, 255, 177, 0.12), transparent 46%) !important;
+}
+
+.profileBadge.bg-midnight .profileCardStage {
+  background:
+    linear-gradient(180deg, rgba(15, 24, 46, 0.92), rgba(8, 14, 28, 0.96)),
+    radial-gradient(circle at 18% 16%, rgba(103, 169, 255, 0.18), transparent 44%),
+    radial-gradient(circle at 82% 18%, rgba(195, 226, 255, 0.12), transparent 46%) !important;
+}
+
+.profileBadge.bg-parchment .profileCardStage {
+  background:
+    linear-gradient(180deg, rgba(126, 97, 63, 0.52), rgba(91, 63, 36, 0.62)),
+    radial-gradient(circle at 18% 16%, rgba(255, 238, 206, 0.26), transparent 44%),
+    radial-gradient(circle at 82% 18%, rgba(190, 136, 84, 0.16), transparent 46%) !important;
+  border-color: rgba(123, 76, 36, 0.64) !important;
+}
+
 .profileCardStage {
   border-color: rgba(255, 211, 115, 0.94) !important;
   background:
@@ -5159,6 +5399,19 @@ header h1,
   animation:
     profileNameGlowPulse 1.75s ease-in-out infinite,
     profileNameGoldSweep 3.4s linear infinite;
+}
+
+.profileBadge.bg-classic .profileCardName,
+.profileBadge.bg-classic .profileCardTier.rarity-common,
+.profileBadge.bg-classic .profileCardTag.rarity-common {
+  font-family: "Luckiest Guy", "Cooper Black", "Comic Sans MS", cursive;
+  font-weight: 900;
+  letter-spacing: 1.8px !important;
+  text-transform: uppercase;
+}
+
+.profileBadge.bg-classic .profileCardName {
+  -webkit-text-stroke: 1.3px rgba(69, 25, 8, 0.96);
 }
 
 @keyframes profileNameGlowPulse {
@@ -5468,4 +5721,14 @@ header h1,
 .profileCardFooter span:last-child {
   background: linear-gradient(180deg, rgba(88, 49, 24, 0.82), rgba(54, 29, 14, 0.92)) !important;
   border-color: rgba(240, 189, 120, 0.58) !important;
+}
+
+/* Keep marketplace panel image visible over global .panel white theme overrides. */
+.profileWindow.panel.marketplaceWindow {
+  color: #eef7ff !important;
+  background:
+    linear-gradient(165deg, rgba(9, 18, 34, 0.3), rgba(12, 20, 37, 0.42)),
+    url('./assets/marketplace_background.png') center/contain no-repeat !important;
+  border-color: rgba(176, 212, 255, 0.66) !important;
+  box-shadow: 0 22px 48px rgba(6, 10, 45, 0.56), inset 0 0 0 1px rgba(176, 212, 255, 0.18) !important;
 }

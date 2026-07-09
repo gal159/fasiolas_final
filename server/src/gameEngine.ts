@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   AvatarId,
+  CardBackgroundId,
   Card,
   ClientStatePayload,
   DealingAction,
@@ -24,8 +25,11 @@ import type {
   TurnAction,
 } from "../../shared/src/types";
 import {
+  AVATAR_PRICE_OVERRIDES,
   AVATAR_OPTIONS,
   AVATAR_RARITY,
+  CARD_BACKGROUND_OPTIONS,
+  CARD_BACKGROUND_RARITY,
   EFFECT_OPTIONS,
   EFFECT_RARITY,
   HAT_OPTIONS,
@@ -92,20 +96,21 @@ const RANK_ORDER: Record<Rank, number> = {
   A: 14,
 };
 
-const BASE_POINTS_PER_GAME = 20;
+const BASE_POINTS_PER_GAME = 200;
 const PLACEMENT_BONUS: Record<number, number> = {
-  1: 20,
-  2: 10,
-  3: 5,
+  1: 200,
+  2: 100,
+  3: 50,
 };
 
 function createDefaultProfile(seedIndex = 0): PlayerProfile {
   return {
     baseColor: PROFILE_COLOR_OPTIONS[seedIndex % PROFILE_COLOR_OPTIONS.length] as ProfileColor,
-    avatarId: "zeus",
+    avatarId: "warrior",
     hatId: "none",
     skinId: "default",
     effectId: "none",
+    cardBackgroundId: "classic",
     profileSlot: PROFILE_SLOT_OPTIONS[seedIndex % PROFILE_SLOT_OPTIONS.length] as ProfileSlot,
   };
 }
@@ -120,6 +125,7 @@ function createDefaultUnlocks(): PlayerUnlocks {
     hats: HAT_OPTIONS.filter((id) => HAT_RARITY[id] === "common") as HatId[],
     skins: SKIN_OPTIONS.filter((id) => SKIN_RARITY[id] === "common") as SkinId[],
     effects: EFFECT_OPTIONS.filter((id) => EFFECT_RARITY[id] === "common") as EffectId[],
+    backgrounds: CARD_BACKGROUND_OPTIONS.filter((id) => CARD_BACKGROUND_RARITY[id] === "common") as CardBackgroundId[],
   };
 }
 
@@ -140,6 +146,7 @@ function cloneAccountState(account: PlayerAccountState): PlayerAccountState {
       hats: [...account.unlocked.hats],
       skins: [...account.unlocked.skins],
       effects: [...account.unlocked.effects],
+        backgrounds: [...account.unlocked.backgrounds],
     },
   };
 }
@@ -154,7 +161,18 @@ function resolveItemRarity(type: ShopItemType, itemId: ShopItemId): RarityId {
   if (type === "skin") {
     return SKIN_RARITY[itemId as SkinId];
   }
+  if (type === "background") {
+    return CARD_BACKGROUND_RARITY[itemId as CardBackgroundId];
+  }
   return EFFECT_RARITY[itemId as EffectId];
+}
+
+function resolveItemCost(type: ShopItemType, itemId: ShopItemId): number {
+  if (type === "avatar") {
+    const avatarId = itemId as AvatarId;
+    return AVATAR_PRICE_OVERRIDES[avatarId] ?? RARITY_PRICES[AVATAR_RARITY[avatarId]];
+  }
+  return RARITY_PRICES[resolveItemRarity(type, itemId)];
 }
 
 function isValidShopItem(type: ShopItemType, itemId: ShopItemId): boolean {
@@ -166,6 +184,9 @@ function isValidShopItem(type: ShopItemType, itemId: ShopItemId): boolean {
   }
   if (type === "skin") {
     return SKIN_OPTIONS.includes(itemId as SkinId);
+  }
+  if (type === "background") {
+    return CARD_BACKGROUND_OPTIONS.includes(itemId as CardBackgroundId);
   }
   return EFFECT_OPTIONS.includes(itemId as EffectId);
 }
@@ -370,7 +391,7 @@ export class GameEngine {
 
     for (const avatarId of AVATAR_OPTIONS) {
       const rarity = AVATAR_RARITY[avatarId];
-      catalog.push({ type: "avatar", id: avatarId, rarity, cost: RARITY_PRICES[rarity] });
+      catalog.push({ type: "avatar", id: avatarId, rarity, cost: resolveItemCost("avatar", avatarId) });
     }
 
     for (const hatId of HAT_OPTIONS) {
@@ -388,6 +409,11 @@ export class GameEngine {
       catalog.push({ type: "effect", id: effectId, rarity, cost: RARITY_PRICES[rarity] });
     }
 
+    for (const backgroundId of CARD_BACKGROUND_OPTIONS) {
+      const rarity = CARD_BACKGROUND_RARITY[backgroundId];
+      catalog.push({ type: "background", id: backgroundId, rarity, cost: RARITY_PRICES[rarity] });
+    }
+
     return catalog;
   }
 
@@ -401,8 +427,7 @@ export class GameEngine {
       throw new Error("Item already owned");
     }
 
-    const rarity = resolveItemRarity(type, itemId);
-    const cost = RARITY_PRICES[rarity];
+    const cost = resolveItemCost(type, itemId);
     if (account.points < cost) {
       throw new Error("Not enough points");
     }
@@ -968,7 +993,8 @@ export class GameEngine {
       account.unlocked.avatars.includes(profile.avatarId) &&
       account.unlocked.hats.includes(profile.hatId) &&
       account.unlocked.skins.includes(profile.skinId) &&
-      account.unlocked.effects.includes(profile.effectId)
+      account.unlocked.effects.includes(profile.effectId) &&
+      account.unlocked.backgrounds.includes(profile.cardBackgroundId)
     );
   }
 
@@ -977,6 +1003,7 @@ export class GameEngine {
     account.unlocked.hats = uniqueItems([...account.unlocked.hats, profile.hatId]);
     account.unlocked.skins = uniqueItems([...account.unlocked.skins, profile.skinId]);
     account.unlocked.effects = uniqueItems([...account.unlocked.effects, profile.effectId]);
+    account.unlocked.backgrounds = uniqueItems([...account.unlocked.backgrounds, profile.cardBackgroundId]);
   }
 
   private isItemUnlocked(account: PlayerAccountState, type: ShopItemType, itemId: ShopItemId): boolean {
@@ -988,6 +1015,9 @@ export class GameEngine {
     }
     if (type === "skin") {
       return account.unlocked.skins.includes(itemId as SkinId);
+    }
+    if (type === "background") {
+      return account.unlocked.backgrounds.includes(itemId as CardBackgroundId);
     }
     return account.unlocked.effects.includes(itemId as EffectId);
   }
@@ -1003,6 +1033,10 @@ export class GameEngine {
     }
     if (type === "skin") {
       account.unlocked.skins = uniqueItems([...account.unlocked.skins, itemId as SkinId]);
+      return;
+    }
+    if (type === "background") {
+      account.unlocked.backgrounds = uniqueItems([...account.unlocked.backgrounds, itemId as CardBackgroundId]);
       return;
     }
     account.unlocked.effects = uniqueItems([...account.unlocked.effects, itemId as EffectId]);
