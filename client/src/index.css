@@ -1,0 +1,14 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  background: radial-gradient(circle at top, #ecf5ef 0, #dbe9e0 45%, #d0e1d6 100%);
+  color: #14211d;
+}
+
+#root {
+  min-height: 100vh;
+}
