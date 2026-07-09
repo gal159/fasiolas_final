@@ -54,6 +54,17 @@ Klientas paleidziamas ant Vite URL (pvz. http://localhost:5173)
   - galima paimti seniausia korta nuo stalo
 - Kai ant stalo kortu kiekis pasiekia zaideju skaiciu, stalas isvalomas ir paskutinis padejes pradeda nauja grandine
 - Pabaiga: lieka vienas su kortomis, jis pralaimi
+- Shop ekonomika profilio langelyje:
+  - taskai uz suzaista matcha: +20 visiems
+  - papildomas Top3 bonusas: +20 / +10 / +5
+  - pirkimai uz taskus (effects, skins, hats, avatars)
+  - Common itemai yra nemokami
+  - kainos pagal rarity: Common 0, Uncommon 100, Rare 250, Epic 1000, Legendary 5000, Mythic 10000
+  - serveris validuoja ownership, tad neisigyti itemai negali buti pritaikomi profilyje
+
+## Shop pastaba
+
+- Dabartiniame etape account/shop progresas laikomas serverio atmintyje (in-memory), todel po server restarto taskai ir pirkimai nusinulina.
 
 ## Pastaba
 
