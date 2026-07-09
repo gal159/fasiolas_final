@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent as ReactMouseEvent, type TouchEvent as ReactTouchEvent } from 'react'
 import { io, type Socket } from 'socket.io-client'
 import {
   AVATAR_RARITY,
@@ -12,9 +12,11 @@ import {
   RARITY_PRICES,
   SKIN_RARITY,
   SKIN_OPTIONS,
+  calcLevel,
   type Card,
   type ClientStatePayload,
   type PlayerAccountState,
+  type PlayerCardInfo,
   type PlayerProfile,
   type RarityId,
   type ShopCatalogItem,
@@ -26,6 +28,7 @@ import './App.css'
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 const PROFILE_SLOTS_STORAGE_KEY = 'fasiolas:profile-slots'
 const LOGIN_SESSION_STORAGE_KEY = 'fasiolas:logged-in'
+const AUTH_USER_ID_STORAGE_KEY = 'fasiolas:auth-user-id'
 const RESET_TOKEN_QUERY_KEY = 'resetToken'
 
 const AVATAR_LABELS: Record<PlayerProfile['avatarId'], string> = {
@@ -121,7 +124,10 @@ function createEmptyAccount(): PlayerAccountState {
 
   return {
     points: 0,
+    registeredAt: Date.now(),
     gamesPlayed: 0,
+    gamesWon: 0,
+    gamesLost: 0,
     unlocked: {
       avatars: defaultAvatars,
       hats: HAT_OPTIONS.filter((id) => HAT_RARITY[id] === 'common'),
@@ -135,6 +141,33 @@ type ProfileSlotMap = Record<PlayerProfile['profileSlot'], PlayerProfile>
 
 function playerStorageKey(roomCode: string): string {
   return `fasiolas:${roomCode}`
+}
+
+function getStoredAuthUserId(): string | undefined {
+  const value = sessionStorage.getItem(AUTH_USER_ID_STORAGE_KEY)?.trim()
+  return value ? value : undefined
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+}
+
+type PlayerAchievement = {
+  id: string
+  title: string
+  unlocked: boolean
+}
+
+function buildPlayerAchievements(info: PlayerCardInfo): PlayerAchievement[] {
+  const totalGames = info.gamesPlayed
+  const winRate = totalGames > 0 ? (info.gamesWon / totalGames) * 100 : 0
+
+  return [
+    { id: 'starter', title: 'Starter', unlocked: totalGames >= 5 },
+    { id: 'veteran', title: 'Veteran', unlocked: totalGames >= 25 },
+    { id: 'winner', title: 'Winner', unlocked: info.gamesWon >= 10 },
+    { id: 'unstoppable', title: 'Unstoppable', unlocked: totalGames >= 15 && winRate >= 60 },
+  ]
 }
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -442,6 +475,10 @@ function App() {
   const [showProfileWindow, setShowProfileWindow] = useState(false)
   const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null)
   const [playingHandSortMode, setPlayingHandSortMode] = useState<PlayingHandSortMode>('suit')
+  const [flippedBadgeId, setFlippedBadgeId] = useState<string | null>(null)
+  const [playerCardInfoCache, setPlayerCardInfoCache] = useState<Record<string, PlayerCardInfo>>({})
+  const [loadingCardInfoId, setLoadingCardInfoId] = useState<string | null>(null)
+  const flipContainerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     const s = io(SERVER_URL)
@@ -501,6 +538,18 @@ function App() {
   useEffect(() => {
     sessionStorage.setItem(PROFILE_SLOTS_STORAGE_KEY, JSON.stringify(profileSlots))
   }, [profileSlots])
+
+  useEffect(() => {
+    if (!flippedBadgeId) return
+    function handleClickAway(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (!target.closest('.flipCard')) {
+        setFlippedBadgeId(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickAway)
+    return () => document.removeEventListener('mousedown', handleClickAway)
+  }, [flippedBadgeId])
 
   useEffect(() => {
     setProfileDraft(withSlot(profileSlots[activeProfileSlot], activeProfileSlot))
@@ -590,6 +639,13 @@ function App() {
     () => payload?.state.players.find((p) => p.id === payload.yourPlayerId) ?? null,
     [payload],
   )
+
+  const accountLevel = useMemo(() => calcLevel(account.gamesPlayed), [account.gamesPlayed])
+  const accountLevelProgress = useMemo(() => (account.gamesPlayed % 5) / 5, [account.gamesPlayed])
+  const accountLevelGamesLeft = useMemo(() => {
+    const modulo = account.gamesPlayed % 5
+    return modulo === 0 ? 5 : 5 - modulo
+  }, [account.gamesPlayed])
 
   const profilePanelProfile = useMemo(
     () => me?.profile ?? profileDraft,
@@ -703,6 +759,52 @@ function App() {
     return [...rankedPlayers, ...missingPlayers]
   }, [payload])
 
+  const statsLeaderboard = useMemo(() => {
+    if (!payload) {
+      return []
+    }
+
+    return payload.state.players
+      .map((player) => {
+        const fallbackInfo: PlayerCardInfo = {
+          playerName: player.name,
+          registeredAt: account.registeredAt,
+          gamesPlayed: account.gamesPlayed,
+          gamesWon: account.gamesWon,
+          gamesLost: account.gamesLost,
+          level: calcLevel(account.gamesPlayed),
+        }
+
+        const info = playerCardInfoCache[player.id] ?? (player.id === payload.yourPlayerId ? fallbackInfo : null)
+        if (!info) {
+          return null
+        }
+
+        const total = Math.max(1, info.gamesPlayed)
+        const winRate = Math.round((info.gamesWon / total) * 100)
+
+        return {
+          playerId: player.id,
+          playerName: info.playerName,
+          level: info.level,
+          gamesPlayed: info.gamesPlayed,
+          gamesWon: info.gamesWon,
+          gamesLost: info.gamesLost,
+          winRate,
+        }
+      })
+      .filter((row): row is NonNullable<typeof row> => Boolean(row))
+      .sort((left, right) => {
+        if (right.gamesWon !== left.gamesWon) {
+          return right.gamesWon - left.gamesWon
+        }
+        if (right.level !== left.level) {
+          return right.level - left.level
+        }
+        return right.gamesPlayed - left.gamesPlayed
+      })
+  }, [account.gamesLost, account.gamesPlayed, account.gamesWon, account.registeredAt, payload, playerCardInfoCache])
+
   function emitAck<TReq extends Record<string, unknown>>(
     event: string,
     request: TReq,
@@ -726,6 +828,52 @@ function App() {
       setAccount((response.account as PlayerAccountState) ?? createEmptyAccount())
     })
   }
+
+  const requestPlayerCardInfo = useCallback((playerId: string, showLoading = true) => {
+    if (!socket) return
+    if (showLoading) {
+      setLoadingCardInfoId(playerId)
+    }
+    socket.emit('get_player_card_info', { targetPlayerId: playerId }, (response: any) => {
+      if (showLoading) {
+        setLoadingCardInfoId(null)
+      }
+      if (response?.ok) {
+        setPlayerCardInfoCache((prev) => ({ ...prev, [playerId]: response as PlayerCardInfo }))
+      }
+    })
+  }, [socket])
+
+  const handleBadgeFlip = useCallback((playerId: string, event?: ReactMouseEvent<HTMLDivElement>) => {
+    event?.preventDefault()
+    event?.stopPropagation()
+
+    if (flippedBadgeId === playerId) {
+      setFlippedBadgeId(null)
+      return
+    }
+
+    setFlippedBadgeId(playerId)
+    if (!isUuid(playerId)) {
+      return
+    }
+    if (playerCardInfoCache[playerId]) {
+      return
+    }
+    requestPlayerCardInfo(playerId, true)
+  }, [flippedBadgeId, playerCardInfoCache, requestPlayerCardInfo])
+
+  useEffect(() => {
+    if (!payload || !socket) {
+      return
+    }
+
+    for (const player of payload.state.players) {
+      if (!playerCardInfoCache[player.id]) {
+        requestPlayerCardInfo(player.id, false)
+      }
+    }
+  }, [payload, playerCardInfoCache, requestPlayerCardInfo, socket])
 
   function refreshShopCatalog(): void {
     emitAck('get_shop_catalog', {}, (response) => {
@@ -756,13 +904,21 @@ function App() {
   }
 
   function createRoom(): void {
-    emitAck('create_room', { name: name || 'Player', profile: withSlot(profileDraft, activeProfileSlot) }, (response) => {
+    emitAck(
+      'create_room',
+      {
+        name: name || 'Player',
+        authUserId: getStoredAuthUserId(),
+        profile: withSlot(profileDraft, activeProfileSlot),
+      },
+      (response) => {
       setRoomCode(response.roomCode as string)
       setRoomCodeInput(response.roomCode as string)
       sessionStorage.setItem(playerStorageKey(String(response.roomCode)), String(response.playerId))
       refreshAccount()
       refreshShopCatalog()
-    })
+      },
+    )
   }
 
   function joinRoom(): void {
@@ -777,6 +933,7 @@ function App() {
       {
         roomCode: normalized,
         name: name || 'Player',
+        authUserId: getStoredAuthUserId(),
         existingPlayerId,
         profile: withSlot(profileDraft, activeProfileSlot),
       },
@@ -1144,6 +1301,189 @@ function App() {
     )
   }
 
+  function renderFlippableCard(
+    profile: PlayerProfile,
+    compact: boolean,
+    displayName: string | undefined,
+    playerId: string,
+  ) {
+    const isFlipped = flippedBadgeId === playerId
+    const isOwnCard = playerId === payload?.yourPlayerId || playerId === 'own'
+    const localInfo: PlayerCardInfo = {
+      playerName: displayName?.trim() || me?.name || name || 'Zaidejas',
+      registeredAt: account.registeredAt,
+      gamesPlayed: account.gamesPlayed,
+      gamesWon: account.gamesWon,
+      gamesLost: account.gamesLost,
+      level: calcLevel(account.gamesPlayed),
+    }
+    const info = playerCardInfoCache[playerId] ?? (isOwnCard ? localInfo : undefined)
+    const isLoading = loadingCardInfoId === playerId
+    const achievements = info ? buildPlayerAchievements(info) : []
+    const visibleAchievements = compact ? achievements.slice(0, 2) : achievements.slice(0, 3)
+    const unlockedAchievementClasses = achievements
+      .filter((achievement) => achievement.unlocked)
+      .map((achievement) => `has-achievement-${achievement.id}`)
+      .join(' ')
+    const isVip = (info?.level ?? 0) >= 20
+
+    const formatDate = (ts: number) => {
+      return new Date(ts).toLocaleDateString('lt-LT', { year: 'numeric', month: 'short', day: 'numeric' })
+    }
+
+    const applyTiltFromPoint = (element: HTMLDivElement, clientX: number, clientY: number) => {
+      const rect = element.getBoundingClientRect()
+      if (!rect.width || !rect.height) {
+        return
+      }
+
+      const x = (clientX - rect.left) / rect.width - 0.5
+      const y = (clientY - rect.top) / rect.height - 0.5
+      const tiltX = Number((-y * 10).toFixed(2))
+      const tiltY = Number((x * 12).toFixed(2))
+
+      element.style.setProperty('--tilt-x', `${tiltX}deg`)
+      element.style.setProperty('--tilt-y', `${tiltY}deg`)
+    }
+
+    const resetTilt = (element: HTMLDivElement) => {
+      element.style.setProperty('--tilt-x', '0deg')
+      element.style.setProperty('--tilt-y', '0deg')
+    }
+
+    const handleCardMouseMove = (event: ReactMouseEvent<HTMLDivElement>) => {
+      const element = event.currentTarget
+      applyTiltFromPoint(element, event.clientX, event.clientY)
+    }
+
+    const handleCardTouchMove = (event: ReactTouchEvent<HTMLDivElement>) => {
+      const element = event.currentTarget
+      const touch = event.touches[0]
+      if (!touch) {
+        return
+      }
+      applyTiltFromPoint(element, touch.clientX, touch.clientY)
+    }
+
+    const handleCardTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
+      const element = event.currentTarget
+      const touch = event.touches[0]
+      if (!touch) {
+        return
+      }
+      applyTiltFromPoint(element, touch.clientX, touch.clientY)
+    }
+
+    const handleCardMouseLeave = (event: ReactMouseEvent<HTMLDivElement>) => {
+      const element = event.currentTarget
+      resetTilt(element)
+    }
+
+    const handleCardTouchEnd = (event: ReactTouchEvent<HTMLDivElement>) => {
+      const element = event.currentTarget
+      resetTilt(element)
+    }
+
+    const effectClass = `effect-${profile.effectId}`
+    const vipClass = isVip ? 'vip-card' : ''
+    const flipCardClass = compact
+      ? (isFlipped
+        ? `flipCard compact flipped ${effectClass} ${vipClass} ${unlockedAchievementClasses}`
+        : `flipCard compact ${effectClass} ${vipClass} ${unlockedAchievementClasses}`)
+      : (isFlipped
+        ? `flipCard flipped ${effectClass} ${vipClass} ${unlockedAchievementClasses}`
+        : `flipCard ${effectClass} ${vipClass} ${unlockedAchievementClasses}`)
+
+    return (
+      <div
+        key={`flip-${playerId}`}
+        className={flipCardClass}
+        onClick={(event) => handleBadgeFlip(playerId, event)}
+        onMouseMove={handleCardMouseMove}
+        onMouseLeave={handleCardMouseLeave}
+        onTouchStart={handleCardTouchStart}
+        onTouchMove={handleCardTouchMove}
+        onTouchEnd={handleCardTouchEnd}
+        onTouchCancel={handleCardTouchEnd}
+        ref={isFlipped ? (el) => { (flipContainerRef as any).current = el } : null}
+      >
+        <div className="flipCardInner">
+          <div className="flipCardFront">
+            {renderProfileBadge(profile, compact, displayName)}
+          </div>
+          <div className="flipCardBack">
+            {isLoading ? (
+              <div className="cardBackLoading"><span className="cardBackSpinner" /></div>
+            ) : info ? (
+              <div className="cardBackContent">
+                <div className="cardBackTop">
+                  <div className="cardBackBrand" data-text="FASIOLAS" aria-label="Fasiolas brand">FASIOLAS</div>
+                </div>
+                <div className="cardBackBody">
+                  <div className="cardBackCoin" aria-label="Fasiolas coin">
+                    <span className="cardBackCoinCore">F</span>
+                  </div>
+                  <div className="cardBackTitle">{info.playerName}</div>
+                  <div className="cardBackLevel">
+                    <span className="cardBackLevelNum">Lv. {info.level}</span>
+                    <span className="cardBackLevelSub">Lygio intervalas: {(info.level - 1) * 5}–{info.level * 5 - 1} suzaista</span>
+                  </div>
+                  <div className="cardBackStats">
+                    <div className="cardBackStat">
+                      <span className="cardBackStatVal">{info.gamesPlayed}</span>
+                      <span className="cardBackStatLabel">Total</span>
+                    </div>
+                    <div className="cardBackStat win">
+                      <span className="cardBackStatVal">{info.gamesWon}</span>
+                      <span className="cardBackStatLabel">Laimeta game</span>
+                    </div>
+                    <div className="cardBackStat loss">
+                      <span className="cardBackStatVal">{info.gamesLost}</span>
+                      <span className="cardBackStatLabel">Pralaimeta game</span>
+                    </div>
+                  </div>
+                  <div className="cardBackAchievements" aria-label="Achievements">
+                    {visibleAchievements.map((achievement) => (
+                      <span
+                        key={achievement.id}
+                        className={achievement.unlocked
+                          ? `cardBackAchievement vip unlocked achievement-${achievement.id}`
+                          : `cardBackAchievement vip locked achievement-${achievement.id}`}
+                      >
+                        {achievement.title}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="cardBackFooter">
+                  <div className="cardBackEdition">VIP SPECIAL EDITION</div>
+                  {isVip ? <div className="cardBackVip">VIP LEVEL</div> : null}
+                  <div className="cardBackRegistered">Registracijos data: {formatDate(info.registeredAt)}</div>
+                </div>
+              </div>
+            ) : (
+              <div className="cardBackContent">
+                <div className="cardBackTop">
+                  <div className="cardBackBrand" data-text="FASIOLAS" aria-label="Fasiolas brand">FASIOLAS</div>
+                </div>
+                <div className="cardBackBody">
+                  <div className="cardBackCoin" aria-label="Fasiolas coin">
+                    <span className="cardBackCoinCore">F</span>
+                  </div>
+                  <div className="cardBackTitle">{displayName ?? 'Zaidejas'}</div>
+                  <div className="cardBackNoData">Duomenys nepasiekiami</div>
+                </div>
+                <div className="cardBackFooter">
+                  <div className="cardBackEdition">VIP SPECIAL EDITION</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   async function handleLogin(): Promise<void> {
     const email = loginUsername.trim().toLowerCase()
     const password = loginPassword.trim()
@@ -1160,7 +1500,13 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       })
-      const payload = (await response.json()) as { ok: boolean; error?: string; email?: string; playerName?: string }
+      const payload = (await response.json()) as {
+        ok: boolean
+        error?: string
+        email?: string
+        userId?: string
+        playerName?: string
+      }
       if (!response.ok || !payload.ok) {
         setLoginError(payload.error ?? 'Prisijungti nepavyko')
         return
@@ -1168,6 +1514,9 @@ function App() {
 
       setLoginError('')
       sessionStorage.setItem(LOGIN_SESSION_STORAGE_KEY, payload.email ?? email)
+      if (payload.userId) {
+        sessionStorage.setItem(AUTH_USER_ID_STORAGE_KEY, payload.userId)
+      }
       setIsLoggedIn(true)
       setName(payload.playerName?.trim() || displayNameFromEmail(payload.email ?? email))
     } catch {
@@ -1212,6 +1561,7 @@ function App() {
         ok: boolean
         error?: string
         message?: string
+        userId?: string
         playerName?: string
       }
 
@@ -1222,6 +1572,9 @@ function App() {
       }
 
       setLoginError('')
+      if (payload.userId) {
+        sessionStorage.setItem(AUTH_USER_ID_STORAGE_KEY, payload.userId)
+      }
       setLoginInfo(payload.message ?? 'Registracija sekminga. Dabar galite prisijungti.')
       setName(payload.playerName?.trim() || playerName)
       setAuthMode('login')
@@ -1321,6 +1674,7 @@ function App() {
 
   function handleLogout(): void {
     sessionStorage.removeItem(LOGIN_SESSION_STORAGE_KEY)
+    sessionStorage.removeItem(AUTH_USER_ID_STORAGE_KEY)
     setIsLoggedIn(false)
     setLoginPassword('')
     setLoginError('')
@@ -1488,9 +1842,15 @@ function App() {
         <div className={`profileQuickPanel quick-effect-${profilePanelProfile.effectId}`}>
           <div className="profileQuickInfo">
             <strong>Profilio langelis</strong>
-            <span>Slotas {activeProfileSlot} | Taskai {account.points} | Zaidimai {account.gamesPlayed}</span>
+            <span>Slotas {activeProfileSlot} | Lv. {accountLevel} | W {account.gamesWon} / L {account.gamesLost} | Total {account.gamesPlayed}</span>
+            <div className="levelProgressWrap" aria-label="Lygio progresas">
+              <div className="levelProgressTrack">
+                <div className="levelProgressFill" style={{ width: `${Math.round(accountLevelProgress * 100)}%` }} />
+              </div>
+              <span className="levelProgressText">Iki kito lygio: {accountLevelGamesLeft} game</span>
+            </div>
           </div>
-          {renderProfileBadge(profilePanelProfile, true, name || me?.name)}
+          {renderFlippableCard(profilePanelProfile, true, name || me?.name, payload?.yourPlayerId ?? 'own')}
           <div className="actions">
             <button type="button" onClick={() => setShowProfileWindow(true)}>Atidaryti profilio langeli</button>
             <button type="button" onClick={saveProfile}>Issaugoti ir pritaikyti</button>
@@ -1642,7 +2002,7 @@ function App() {
                 <div className="shopPanel" aria-label="Shop panel">
                   <div className="shopPanelHeader">
                     <strong>Shop</strong>
-                    <span>Taskai: {account.points} | Zaidimai: {account.gamesPlayed}</span>
+                      <span>Taskai: {account.points} | Lygis: {accountLevel} | Total: {account.gamesPlayed}</span>
                   </div>
                   <p className="shopPanelHint">Kiekvienas match: +20 tasku visiems, Top3 bonusai: +20 / +10 / +5.</p>
 
@@ -1875,7 +2235,7 @@ function App() {
                 >
                   <div className="seatIdentity">
                     <div className={seat.isMe ? 'seatIdentityRow meSeatIdentityRow' : 'seatIdentityRow opponentSeatIdentityRow'}>
-                      {renderProfileBadge(seat.profile, true, seat.name)}
+                      {renderFlippableCard(seat.profile, true, seat.name, seat.id)}
                       {payload.state.phase !== 'PLAYING'
                         ? seat.topCard ? (
                             <div
@@ -1933,7 +2293,7 @@ function App() {
             <div>Eile: {payload.state.currentTurnPlayerId?.slice(0, 8) ?? '-'}</div>
             <div>Kozeris: {payload.state.trumpSuit ?? 'none'}</div>
             <div>Kalades viduryje: {payload.state.centerDeckCount}</div>
-            {me ? <div className="statusProfile">{renderProfileBadge(me.profile, true, me.name)}</div> : null}
+            {me ? <div className="statusProfile">{renderFlippableCard(me.profile, true, me.name, payload.yourPlayerId)}</div> : null}
           </section>
 
           <section className="panel">
@@ -1941,13 +2301,45 @@ function App() {
             <div className="players">
               {payload.state.players.map((p) => (
                 <article key={p.id} className={p.id === payload.yourPlayerId ? 'player me' : 'player'}>
-                  {renderProfileBadge(p.profile, true, p.name)}
+                  {renderFlippableCard(p.profile, true, p.name, p.id)}
                   <strong>{p.name}</strong>
                   <span>ID: {p.id.slice(0, 8)}</span>
                   <span>Kortos: {p.cardCount}</span>
                   <span>Virsus: {cardLabel(p.topCard)}</span>
                 </article>
               ))}
+            </div>
+          </section>
+
+          <section className="panel">
+            <h2>Zaideju statistika</h2>
+            <div className="statsTableWrap">
+              <table className="statsTable" aria-label="Zaideju statistikos lentele">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Zaidejas</th>
+                    <th>Lvl</th>
+                    <th>Laimeta</th>
+                    <th>Pralaimeta</th>
+                    <th>Total</th>
+                    <th>Win %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {statsLeaderboard.map((row, index) => (
+                    <tr key={`stat-row-${row.playerId}`} className={row.playerId === payload.yourPlayerId ? 'me' : ''}>
+                      <td>{index + 1}</td>
+                      <td>{row.playerName}</td>
+                      <td>{row.level}</td>
+                      <td>{row.gamesWon}</td>
+                      <td>{row.gamesLost}</td>
+                      <td>{row.gamesPlayed}</td>
+                      <td>{row.winRate}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </section>
 

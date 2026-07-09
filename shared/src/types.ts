@@ -107,8 +107,24 @@ export interface PlayerUnlocks {
 
 export interface PlayerAccountState {
   points: number;
+  registeredAt: number;
   gamesPlayed: number;
+  gamesWon: number;
+  gamesLost: number;
   unlocked: PlayerUnlocks;
+}
+
+export interface PlayerCardInfo {
+  playerName: string;
+  registeredAt: number;
+  gamesPlayed: number;
+  gamesWon: number;
+  gamesLost: number;
+  level: number;
+}
+
+export function calcLevel(gamesPlayed: number): number {
+  return Math.floor(gamesPlayed / 5) + 1;
 }
 
 export interface ShopCatalogItem {

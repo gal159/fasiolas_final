@@ -15,6 +15,7 @@ import {
   PROFILE_SLOT_OPTIONS,
   SKIN_OPTIONS,
   type PlayerProfile,
+  type PlayerCardInfo,
   type ShopItemId,
   type ShopItemType,
   type TurnAction,
@@ -43,6 +44,8 @@ type AuthUser = {
   createdAt: number;
   updatedAt: number;
 };
+
+const AUTH_USER_ID_REGEX = /^[a-f0-9]{32}$/i;
 
 const registerSchema = z.object({
   email: z.string().trim().email().max(120),
@@ -128,7 +131,9 @@ app.post("/auth/register", async (req, res) => {
     res.json({
       ok: true,
       message: "Registracija sekminga. Dabar galite prisijungti.",
+      userId: nextUser.id,
       playerName,
+      registeredAt: nextUser.createdAt,
     });
   } catch (error) {
     res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
@@ -146,7 +151,13 @@ app.post("/auth/login", async (req, res) => {
       return;
     }
 
-    res.json({ ok: true, email: user.email, playerName: user.playerName });
+    res.json({
+      ok: true,
+      email: user.email,
+      userId: user.id,
+      playerName: user.playerName,
+      registeredAt: user.createdAt,
+    });
   } catch (error) {
     res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
   }
@@ -240,12 +251,14 @@ const profileSchema = z.object({
 
 const createRoomSchema = z.object({
   name: z.string().trim().min(1).max(24),
+  authUserId: z.string().trim().regex(AUTH_USER_ID_REGEX).optional(),
   profile: profileSchema.optional(),
 });
 
 const joinRoomSchema = z.object({
   roomCode: z.string().trim().min(2).max(12),
   name: z.string().trim().min(1).max(24),
+  authUserId: z.string().trim().regex(AUTH_USER_ID_REGEX).optional(),
   existingPlayerId: z.string().uuid().optional(),
   profile: profileSchema.optional(),
 });
@@ -257,6 +270,10 @@ const updateProfileSchema = z.object({
 const purchaseItemSchema = z.object({
   itemType: z.enum(["avatar", "hat", "skin", "effect"]),
   itemId: z.string().trim().min(1),
+});
+
+const playerCardInfoSchema = z.object({
+  targetPlayerId: z.string().trim().uuid(),
 });
 
 function emitRoomState(roomCode: string): void {
@@ -276,12 +293,23 @@ io.on("connection", (socket) => {
   socket.on("create_room", (payload: unknown, ack) => {
     try {
       const parsed = createRoomSchema.parse(payload);
-      const { roomCode, playerId } = engine.createRoom(parsed.name, socket.id, parsed.profile);
-      socket.data.roomCode = roomCode;
-      socket.data.playerId = playerId;
-      socket.join(roomCode);
-      emitRoomState(roomCode);
-      ack?.({ ok: true, roomCode, playerId });
+      const authUser = parsed.authUserId ? authUsersDb.findOne({ id: parsed.authUserId }) : null;
+      Promise.resolve(authUser)
+        .then((resolvedAuthUser) => {
+          const effectiveName = resolvedAuthUser?.playerName?.trim() || parsed.name;
+          const { roomCode, playerId } = engine.createRoom(effectiveName, socket.id, parsed.profile, {
+            authUserId: resolvedAuthUser?.id ?? parsed.authUserId ?? null,
+            registeredAt: resolvedAuthUser?.createdAt,
+          });
+          socket.data.roomCode = roomCode;
+          socket.data.playerId = playerId;
+          socket.join(roomCode);
+          emitRoomState(roomCode);
+          ack?.({ ok: true, roomCode, playerId });
+        })
+        .catch((error) => {
+          ack?.({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+        });
     } catch (error) {
       ack?.({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
     }
@@ -292,19 +320,30 @@ io.on("connection", (socket) => {
       const parsed = joinRoomSchema.parse(payload);
       const roomCode = parsed.roomCode.trim().toUpperCase();
       const existingPlayerId = parsed.existingPlayerId;
-      let playerId = existingPlayerId;
-      if (playerId) {
-        engine.updateSocket(roomCode, playerId, socket.id);
-      } else {
-        const joined = engine.joinRoom(roomCode, parsed.name, socket.id, parsed.profile);
-        playerId = joined.playerId;
-      }
+      const authUser = parsed.authUserId ? authUsersDb.findOne({ id: parsed.authUserId }) : null;
+      Promise.resolve(authUser)
+        .then((resolvedAuthUser) => {
+          let playerId = existingPlayerId;
+          if (playerId) {
+            engine.updateSocket(roomCode, playerId, socket.id);
+          } else {
+            const effectiveName = resolvedAuthUser?.playerName?.trim() || parsed.name;
+            const joined = engine.joinRoom(roomCode, effectiveName, socket.id, parsed.profile, {
+              authUserId: resolvedAuthUser?.id ?? parsed.authUserId ?? null,
+              registeredAt: resolvedAuthUser?.createdAt,
+            });
+            playerId = joined.playerId;
+          }
 
-      socket.data.roomCode = roomCode;
-      socket.data.playerId = playerId;
-      socket.join(roomCode);
-      emitRoomState(roomCode);
-      ack?.({ ok: true, roomCode, playerId });
+          socket.data.roomCode = roomCode;
+          socket.data.playerId = playerId;
+          socket.join(roomCode);
+          emitRoomState(roomCode);
+          ack?.({ ok: true, roomCode, playerId });
+        })
+        .catch((error) => {
+          ack?.({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+        });
     } catch (error) {
       ack?.({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
     }
@@ -406,6 +445,30 @@ io.on("connection", (socket) => {
       if (roomCode) {
         emitRoomState(roomCode);
       }
+    } catch (error) {
+      ack?.({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  socket.on("get_player_card_info", async (payload: unknown, ack) => {
+    try {
+      const { targetPlayerId } = playerCardInfoSchema.parse(payload);
+      const roomCode = socket.data.roomCode as string;
+      const info = engine.getPlayerCardInfo(roomCode, targetPlayerId);
+      let responseInfo: PlayerCardInfo = info;
+
+      // Prefer exact auth user linkage when available.
+      try {
+        const authUserId = engine.getPlayerAuthUserId(roomCode, targetPlayerId);
+        const authUser = authUserId ? await authUsersDb.findOne({ id: authUserId }) : null;
+        if (authUser?.createdAt) {
+          responseInfo = { ...info, registeredAt: authUser.createdAt };
+        }
+      } catch {
+        // ignore lookup failure
+      }
+
+      ack?.({ ok: true, ...responseInfo });
     } catch (error) {
       ack?.({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
     }
