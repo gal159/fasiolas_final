@@ -7420,3 +7420,90 @@ header h1,
 .statsTable tbody tr.me {
   background: linear-gradient(90deg, rgba(126, 255, 158, 0.12), rgba(255, 224, 130, 0.08));
 }
+
+.page.mainMenuPage {
+  width: 100vw;
+  max-width: none !important;
+  margin: 0 !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-radius: 0;
+  background:
+    linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)),
+    url('./assets/main_fonas.png') center / cover no-repeat !important;
+}
+
+.page.mainMenuPage .panel,
+.page.mainMenuPage .profileQuickPanel,
+.page.mainMenuPage .row input {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(248, 243, 234, 0.56)) !important;
+}
+
+.page.mainMenuPage .panel > *:not(.actions):not(.profileQuickPanel),
+.page.mainMenuPage .profileQuickPanel > *:not(.flipCard) {
+  opacity: 0.78;
+}
+
+.page.mainMenuPage button,
+.page.mainMenuPage .actions,
+.page.mainMenuPage .flipCard,
+.page.mainMenuPage .flipCard *,
+.page.mainMenuPage .profileBadge,
+.page.mainMenuPage .profileBadge * {
+  opacity: 1 !important;
+}
+
+.page.mainMenuPage .profileCardSlot .profileSlotTooltip {
+  opacity: 0 !important;
+  transform: translateY(6px) !important;
+  pointer-events: none;
+}
+
+.page.mainMenuPage .profileCardSlot:hover .profileSlotTooltip,
+.page.mainMenuPage .profileCardSlot:focus-visible .profileSlotTooltip {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+}
+
+button {
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+  appearance: none;
+  border: none !important;
+  outline: none;
+  border-radius: 12px;
+  background: transparent !important;
+  color: #ffe8c4 !important;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+  box-shadow: none !important;
+}
+
+button::before {
+  content: "";
+  position: absolute;
+  inset: -2px -4px;
+  background: url('./assets/mygtukas.png') center / 100% 100% no-repeat;
+  box-shadow: none;
+  pointer-events: none;
+  z-index: -1;
+}
+
+button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+button:disabled {
+  background: transparent !important;
+  color: rgba(255, 232, 196, 0.78) !important;
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+button:focus,
+button:focus-visible,
+button:active {
+  outline: none;
+  box-shadow: none !important;
+}

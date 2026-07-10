@@ -2374,7 +2374,7 @@ function App() {
   }
 
   return (
-    <div className="page">
+    <div className="page mainMenuPage">
       <header>
         <div className="headerRow">
           <div>
