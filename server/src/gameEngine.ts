@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type {
   AvatarId,
   CardBackgroundId,
+  TableId,
   Card,
   ClientStatePayload,
   DealingAction,
@@ -40,6 +41,8 @@ import {
   RARITY_PRICES,
   SKIN_OPTIONS,
   SKIN_RARITY,
+  TABLE_OPTIONS,
+  TABLE_RARITY,
   calcLevel,
 } from "../../shared/src/types";
 
@@ -114,6 +117,7 @@ function createDefaultProfile(seedIndex = 0): PlayerProfile {
     skinId: "default",
     effectId: "none",
     cardBackgroundId: "classic",
+    tableId: "common_green",
     profileSlot: PROFILE_SLOT_OPTIONS[seedIndex % PROFILE_SLOT_OPTIONS.length] as ProfileSlot,
   };
 }
@@ -129,6 +133,7 @@ function createDefaultUnlocks(): PlayerUnlocks {
     skins: SKIN_OPTIONS.filter((id) => SKIN_RARITY[id] === "common") as SkinId[],
     effects: EFFECT_OPTIONS.filter((id) => EFFECT_RARITY[id] === "common") as EffectId[],
     backgrounds: CARD_BACKGROUND_OPTIONS.filter((id) => CARD_BACKGROUND_RARITY[id] === "common") as CardBackgroundId[],
+    tables: TABLE_OPTIONS.filter((id) => TABLE_RARITY[id] === "common") as TableId[],
   };
 }
 
@@ -155,7 +160,8 @@ function cloneAccountState(account: PlayerAccountState): PlayerAccountState {
       hats: [...account.unlocked.hats],
       skins: [...account.unlocked.skins],
       effects: [...account.unlocked.effects],
-        backgrounds: [...account.unlocked.backgrounds],
+      backgrounds: [...account.unlocked.backgrounds],
+      tables: [...(account.unlocked.tables ?? TABLE_OPTIONS.filter((id) => TABLE_RARITY[id] === "common"))],
     },
   };
 }
@@ -172,6 +178,9 @@ function resolveItemRarity(type: ShopItemType, itemId: ShopItemId): RarityId {
   }
   if (type === "background") {
     return CARD_BACKGROUND_RARITY[itemId as CardBackgroundId];
+  }
+  if (type === "table") {
+    return TABLE_RARITY[itemId as TableId];
   }
   return EFFECT_RARITY[itemId as EffectId];
 }
@@ -196,6 +205,9 @@ function isValidShopItem(type: ShopItemType, itemId: ShopItemId): boolean {
   }
   if (type === "background") {
     return CARD_BACKGROUND_OPTIONS.includes(itemId as CardBackgroundId);
+  }
+  if (type === "table") {
+    return TABLE_OPTIONS.includes(itemId as TableId);
   }
   return EFFECT_OPTIONS.includes(itemId as EffectId);
 }
@@ -448,6 +460,11 @@ export class GameEngine {
     for (const backgroundId of CARD_BACKGROUND_OPTIONS) {
       const rarity = CARD_BACKGROUND_RARITY[backgroundId];
       catalog.push({ type: "background", id: backgroundId, rarity, cost: RARITY_PRICES[rarity] });
+    }
+
+    for (const tableId of TABLE_OPTIONS) {
+      const rarity = TABLE_RARITY[tableId];
+      catalog.push({ type: "table", id: tableId, rarity, cost: RARITY_PRICES[rarity] });
     }
 
     return catalog;
@@ -1069,7 +1086,8 @@ export class GameEngine {
       account.unlocked.hats.includes(profile.hatId) &&
       account.unlocked.skins.includes(profile.skinId) &&
       account.unlocked.effects.includes(profile.effectId) &&
-      account.unlocked.backgrounds.includes(profile.cardBackgroundId)
+      account.unlocked.backgrounds.includes(profile.cardBackgroundId) &&
+      account.unlocked.tables.includes(profile.tableId)
     );
   }
 
@@ -1079,6 +1097,7 @@ export class GameEngine {
     account.unlocked.skins = uniqueItems([...account.unlocked.skins, profile.skinId]);
     account.unlocked.effects = uniqueItems([...account.unlocked.effects, profile.effectId]);
     account.unlocked.backgrounds = uniqueItems([...account.unlocked.backgrounds, profile.cardBackgroundId]);
+    account.unlocked.tables = uniqueItems([...account.unlocked.tables, profile.tableId]);
   }
 
   private isItemUnlocked(account: PlayerAccountState, type: ShopItemType, itemId: ShopItemId): boolean {
@@ -1093,6 +1112,9 @@ export class GameEngine {
     }
     if (type === "background") {
       return account.unlocked.backgrounds.includes(itemId as CardBackgroundId);
+    }
+    if (type === "table") {
+      return account.unlocked.tables.includes(itemId as TableId);
     }
     return account.unlocked.effects.includes(itemId as EffectId);
   }
@@ -1112,6 +1134,10 @@ export class GameEngine {
     }
     if (type === "background") {
       account.unlocked.backgrounds = uniqueItems([...account.unlocked.backgrounds, itemId as CardBackgroundId]);
+      return;
+    }
+    if (type === "table") {
+      account.unlocked.tables = uniqueItems([...account.unlocked.tables, itemId as TableId]);
       return;
     }
     account.unlocked.effects = uniqueItems([...account.unlocked.effects, itemId as EffectId]);

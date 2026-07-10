@@ -22,6 +22,8 @@ import {
   RARITY_PRICES,
   SKIN_RARITY,
   SKIN_OPTIONS,
+  TABLE_OPTIONS,
+  TABLE_RARITY,
   type AuthBootstrapPayload,
   type PlayerAccountState,
   type PlayerCardInfo,
@@ -99,6 +101,7 @@ const profileSchema = z.object({
   skinId: z.enum(SKIN_OPTIONS),
   effectId: z.enum(EFFECT_OPTIONS),
   cardBackgroundId: z.enum(CARD_BACKGROUND_OPTIONS),
+  tableId: z.enum(TABLE_OPTIONS).optional().default("common_green"),
   profileSlot: z.enum(PROFILE_SLOT_OPTIONS),
 });
 
@@ -115,7 +118,7 @@ const saveProfileSchema = z.object({
 
 const authPurchaseSchema = z.object({
   email: z.string().trim().email().max(120),
-  itemType: z.enum(["avatar", "hat", "skin", "effect", "background"]),
+  itemType: z.enum(["avatar", "hat", "skin", "effect", "background", "table"]),
   itemId: z.string().trim().min(1),
 });
 
@@ -145,6 +148,7 @@ function createDefaultProfile(slot: PlayerProfile["profileSlot"] = PROFILE_SLOT_
     skinId: "default",
     effectId: "none",
     cardBackgroundId: "classic",
+    tableId: "common_green",
     profileSlot: slot,
   };
 }
@@ -157,6 +161,7 @@ function normalizeProfile(profile: PlayerProfile, slot: PlayerProfile["profileSl
     cardBackgroundId: CARD_BACKGROUND_OPTIONS.includes(profile.cardBackgroundId)
       ? profile.cardBackgroundId
       : "classic",
+    tableId: TABLE_OPTIONS.includes(profile.tableId) ? profile.tableId : "common_green",
   };
 }
 
@@ -197,6 +202,7 @@ function createDefaultAccount(): PlayerAccountState {
       skins: SKIN_OPTIONS.filter((id) => SKIN_RARITY[id] === "common"),
       effects: EFFECT_OPTIONS.filter((id) => EFFECT_RARITY[id] === "common"),
       backgrounds: defaultBackgrounds,
+      tables: TABLE_OPTIONS.filter((id) => TABLE_RARITY[id] === "common"),
     },
   };
 }
@@ -219,6 +225,7 @@ function normalizeAccount(account: PlayerAccountState | undefined): PlayerAccoun
       skins: account.unlocked?.skins ?? fallback.unlocked.skins,
       effects: account.unlocked?.effects ?? fallback.unlocked.effects,
       backgrounds: account.unlocked?.backgrounds ?? fallback.unlocked.backgrounds,
+      tables: account.unlocked?.tables ?? fallback.unlocked.tables,
     },
   };
 }
@@ -242,9 +249,11 @@ async function hydrateAuthUser(user: AuthUser): Promise<AuthUser> {
 
   const needsUpdate =
     user.profileSlots === undefined ||
+    user.profileSlots?.A?.tableId === undefined ||
     user.activeProfileSlot === undefined ||
     user.account === undefined ||
     user.account.unlocked?.backgrounds === undefined ||
+    user.account.unlocked?.tables === undefined ||
     user.hasCompletedProfileSetup === undefined;
 
   if (!needsUpdate) {
@@ -531,7 +540,7 @@ const updateProfileSchema = z.object({
 });
 
 const purchaseItemSchema = z.object({
-  itemType: z.enum(["avatar", "hat", "skin", "effect", "background"]),
+  itemType: z.enum(["avatar", "hat", "skin", "effect", "background", "table"]),
   itemId: z.string().trim().min(1),
 });
 
@@ -547,6 +556,9 @@ function isValidShopItem(type: ShopItemType, itemId: ShopItemId): boolean {
   }
   if (type === "effect") {
     return EFFECT_OPTIONS.includes(itemId as PlayerProfile["effectId"]);
+  }
+  if (type === "table") {
+    return TABLE_OPTIONS.includes(itemId as PlayerProfile["tableId"]);
   }
   return CARD_BACKGROUND_OPTIONS.includes(itemId as PlayerProfile["cardBackgroundId"]);
 }
@@ -568,6 +580,9 @@ function resolveItemCost(type: ShopItemType, itemId: ShopItemId): number {
   if (type === "effect") {
     return RARITY_PRICES[EFFECT_RARITY[itemId as PlayerProfile["effectId"]]];
   }
+  if (type === "table") {
+    return RARITY_PRICES[TABLE_RARITY[itemId as PlayerProfile["tableId"]]];
+  }
   return RARITY_PRICES[CARD_BACKGROUND_RARITY[itemId as PlayerProfile["cardBackgroundId"]]];
 }
 
@@ -583,6 +598,9 @@ function isItemUnlocked(account: PlayerAccountState, type: ShopItemType, itemId:
   }
   if (type === "effect") {
     return account.unlocked.effects.includes(itemId as PlayerProfile["effectId"]);
+  }
+  if (type === "table") {
+    return account.unlocked.tables.includes(itemId as PlayerProfile["tableId"]);
   }
   return account.unlocked.backgrounds.includes(itemId as PlayerProfile["cardBackgroundId"]);
 }
@@ -602,6 +620,10 @@ function unlockItem(account: PlayerAccountState, type: ShopItemType, itemId: Sho
   }
   if (type === "effect") {
     account.unlocked.effects.push(itemId as PlayerProfile["effectId"]);
+    return;
+  }
+  if (type === "table") {
+    account.unlocked.tables.push(itemId as PlayerProfile["tableId"]);
     return;
   }
   account.unlocked.backgrounds.push(itemId as PlayerProfile["cardBackgroundId"]);

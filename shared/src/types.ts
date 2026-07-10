@@ -30,6 +30,16 @@ export const EFFECT_OPTIONS = ["none", "outline", "glow", "fire", "shadow", "tra
 
 export const CARD_BACKGROUND_OPTIONS = ["classic", "crimson", "emerald", "midnight", "parchment"] as const;
 
+export const TABLE_OPTIONS = [
+  "common_green",
+  "common_blue",
+  "common_purple",
+  "common_red",
+  "legendary_green",
+  "legendary_purple",
+  "legendary_red",
+] as const;
+
 export const PROFILE_SLOT_OPTIONS = ["A", "B", "C"] as const;
 
 export type ProfileColor = (typeof PROFILE_COLOR_OPTIONS)[number];
@@ -38,6 +48,7 @@ export type HatId = (typeof HAT_OPTIONS)[number];
 export type SkinId = (typeof SKIN_OPTIONS)[number];
 export type EffectId = (typeof EFFECT_OPTIONS)[number];
 export type CardBackgroundId = (typeof CARD_BACKGROUND_OPTIONS)[number];
+export type TableId = (typeof TABLE_OPTIONS)[number];
 export type ProfileSlot = (typeof PROFILE_SLOT_OPTIONS)[number];
 
 export const RARITY_OPTIONS = ["common", "uncommon", "rare", "epic", "legendary", "mythic"] as const;
@@ -65,9 +76,19 @@ export const CARD_BACKGROUND_RARITY: Record<CardBackgroundId, RarityId> = {
   parchment: "legendary",
 };
 
-export type ShopItemType = "avatar" | "hat" | "skin" | "effect" | "background";
+export const TABLE_RARITY: Record<TableId, RarityId> = {
+  common_green: "common",
+  common_blue: "common",
+  common_purple: "common",
+  common_red: "common",
+  legendary_green: "legendary",
+  legendary_purple: "legendary",
+  legendary_red: "legendary",
+};
 
-export type ShopItemId = AvatarId | HatId | SkinId | EffectId | CardBackgroundId;
+export type ShopItemType = "avatar" | "hat" | "skin" | "effect" | "background" | "table";
+
+export type ShopItemId = AvatarId | HatId | SkinId | EffectId | CardBackgroundId | TableId;
 
 export const AVATAR_RARITY: Record<AvatarId, RarityId> = {
   zeus: "legendary",
@@ -111,6 +132,7 @@ export interface PlayerProfile {
   skinId: SkinId;
   effectId: EffectId;
   cardBackgroundId: CardBackgroundId;
+  tableId: TableId;
   profileSlot: ProfileSlot;
 }
 
@@ -122,6 +144,7 @@ export interface PlayerUnlocks {
   skins: SkinId[];
   effects: EffectId[];
   backgrounds: CardBackgroundId[];
+  tables: TableId[];
 }
 
 export interface PlayerAccountState {

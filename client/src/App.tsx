@@ -16,6 +16,8 @@ import {
   RARITY_PRICES,
   SKIN_RARITY,
   SKIN_OPTIONS,
+  TABLE_OPTIONS,
+  TABLE_RARITY,
   calcLevel,
   type Card,
   type ClientStatePayload,
@@ -79,6 +81,16 @@ const CARD_BACKGROUND_LABELS: Record<PlayerProfile['cardBackgroundId'], string> 
   parchment: 'Ancient parchment',
 }
 
+const TABLE_LABELS: Record<PlayerProfile['tableId'], string> = {
+  common_green: 'Zalias stalas',
+  common_blue: 'Melynas stalas',
+  common_purple: 'Violetinis stalas',
+  common_red: 'Raudonas stalas',
+  legendary_green: 'Karaliskas zalias',
+  legendary_purple: 'Karaliskas violetinis',
+  legendary_red: 'Karaliskas raudonas',
+}
+
 const AVATAR_ELEMENT_LABELS: Record<PlayerProfile['avatarId'], string> = {
   zeus: 'Sky',
   warrior: 'Valor',
@@ -121,10 +133,11 @@ const RARITY_GAMES_REQUIRED: Record<RarityId, number> = {
   mythic: 260,
 }
 
-const SHOP_SECTION_ORDER: ShopItemType[] = ['background', 'effect', 'skin', 'hat', 'avatar']
+const SHOP_SECTION_ORDER: ShopItemType[] = ['background', 'table', 'effect', 'skin', 'hat', 'avatar']
 
 const SHOP_SECTION_LABELS: Record<ShopItemType, string> = {
   background: 'Card backgrounds',
+  table: 'Stalai',
   effect: 'Effects',
   skin: 'Skins',
   hat: 'Hats',
@@ -133,6 +146,7 @@ const SHOP_SECTION_LABELS: Record<ShopItemType, string> = {
 
 const SHOP_ITEM_LABELS: Record<ShopItemType, Record<string, string>> = {
   background: CARD_BACKGROUND_LABELS,
+  table: TABLE_LABELS,
   effect: EFFECT_LABELS,
   skin: SKIN_LABELS,
   hat: HAT_LABELS,
@@ -156,6 +170,7 @@ function createEmptyAccount(): PlayerAccountState {
       skins: SKIN_OPTIONS.filter((id) => SKIN_RARITY[id] === 'common'),
       effects: EFFECT_OPTIONS.filter((id) => EFFECT_RARITY[id] === 'common'),
       backgrounds: CARD_BACKGROUND_OPTIONS.filter((id) => CARD_BACKGROUND_RARITY[id] === 'common'),
+      tables: TABLE_OPTIONS.filter((id) => TABLE_RARITY[id] === 'common'),
     },
   }
 }
@@ -178,6 +193,7 @@ function normalizeAccountState(account: PlayerAccountState | undefined): PlayerA
       skins: account.unlocked?.skins ?? fallback.unlocked.skins,
       effects: account.unlocked?.effects ?? fallback.unlocked.effects,
       backgrounds: account.unlocked?.backgrounds ?? fallback.unlocked.backgrounds,
+      tables: account.unlocked?.tables ?? fallback.unlocked.tables,
     },
   }
 }
