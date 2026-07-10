@@ -2396,25 +2396,6 @@ function App() {
         {error ? <div className="error">{error}</div> : null}
       </section>
 
-      {(roomCode || (payload && payload.state.phase === 'LOBBY')) ? (
-        <section className="panel status">
-          <h2>Lobby</h2>
-          <div>Kambario kodas: {payload?.state.roomCode ?? roomCode}</div>
-          <div>Faze: {payload?.state.phase ?? 'LOBBY'}</div>
-          <div>Zaidejai: {payload?.state.players.length ?? 1}</div>
-          {payload?.state.phase === 'LOBBY' ? (
-            <div className="players">
-              {payload.state.players.map((p) => (
-                <article key={`lobby-${p.id}`} className={p.id === payload.yourPlayerId ? 'player me' : 'player'}>
-                  <strong>{p.name}</strong>
-                  <span>ID: {p.id.slice(0, 8)}</span>
-                </article>
-              ))}
-            </div>
-          ) : null}
-        </section>
-      ) : null}
-
       {showMarketplaceWindow ? (
         <section className="profileWindowOverlay" role="dialog" aria-modal="true" aria-label="Marketplace">
           <article className="profileWindow panel marketplaceWindow">
@@ -2712,7 +2693,7 @@ function App() {
         </section>
       ) : null}
 
-      {payload ? (
+      {payload && payload.state.phase !== 'LOBBY' ? (
         <>
           <section className="panel status">
             <div>Kambarys: {payload.state.roomCode}</div>
