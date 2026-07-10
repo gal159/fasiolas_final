@@ -3461,14 +3461,20 @@ button:disabled {
   margin-top: 0;
 }
 
+/* Profilio kortele virs zaidimo kortos, kad korta atrodytu palindusi po ja. */
+.tableSeat .seatIdentityRow .flipCard {
+  position: relative;
+  z-index: 5;
+}
+
 .mySeatTopCard {
-  top: 14px;
+  top: 6px;
   bottom: auto;
 }
 
 .opponentTopCard {
   top: auto;
-  bottom: 28px;
+  bottom: 64px;
 }
 
 .seatTopCard .playingCard.compact {
