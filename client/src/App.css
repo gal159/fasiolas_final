@@ -557,6 +557,19 @@ button:disabled {
   justify-content: center;
 }
 
+.profileQuickPanel .lobbyPlayersRow {
+  justify-self: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: center;
+}
+
+.profileQuickPanel .lobbyPlayerCard {
+  display: grid;
+  justify-items: center;
+}
+
 .profileQuickPanel::before {
   content: "";
   position: absolute;
@@ -3365,6 +3378,29 @@ button:disabled {
 
 .centerDeckWrap .deckFront {
   top: 0;
+}
+
+.centerDeckArea {
+  position: relative;
+  margin-top: 6px;
+}
+
+.centerDeckArea .centerDeckWrap {
+  margin-top: 0;
+}
+
+.deckRevealOverlay {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 64px;
+  height: 90px;
+  margin-left: -32px;
+  z-index: 2;
+}
+
+.deckRevealOverlay.draggableCard {
+  cursor: grab;
 }
 
 .deckRevealAnim {

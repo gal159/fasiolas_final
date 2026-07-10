@@ -549,6 +549,7 @@ function App() {
   const [showTableWindow, setShowTableWindow] = useState(false)
   const [showMarketplaceWindow, setShowMarketplaceWindow] = useState(false)
   const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null)
+  const [isRevealedCardDragged, setIsRevealedCardDragged] = useState(false)
   const [playingHandSortMode, setPlayingHandSortMode] = useState<PlayingHandSortMode>('suit')
   const [flyingPlayedCard, setFlyingPlayedCard] = useState<{
     card: Card
@@ -1364,7 +1365,19 @@ function App() {
   }
 
   function handleSeatDrop(targetPlayerId: string): void {
-    if (!payload || draggedCardIndex === null) {
+    if (!payload) {
+      return
+    }
+
+    if (isRevealedCardDragged) {
+      setIsRevealedCardDragged(false)
+      if (isMyTurn && payload.state.phase === 'DEALING' && payload.state.revealedDrawCard) {
+        handlePlaceRevealedWithSlide(targetPlayerId)
+      }
+      return
+    }
+
+    if (draggedCardIndex === null) {
       return
     }
     if (!isMyTurn) {
@@ -2385,7 +2398,17 @@ function App() {
               <span className="levelProgressText">Iki kito lygio: {accountLevelGamesLeft} game</span>
             </div>
           </div>
-          {renderFlippableCard(profilePanelProfile, true, name || me?.name, payload?.yourPlayerId ?? 'own')}
+          {payload && payload.state.phase === 'LOBBY' ? (
+            <div className="lobbyPlayersRow" aria-label="Prisijunge zaidejai">
+              {payload.state.players.map((p) => (
+                <div key={`lobby-player-${p.id}`} className="lobbyPlayerCard">
+                  {renderFlippableCard(p.profile, true, p.name, p.id)}
+                </div>
+              ))}
+            </div>
+          ) : (
+            renderFlippableCard(profilePanelProfile, true, name || me?.name, payload?.yourPlayerId ?? 'own')
+          )}
           <div className="actions">
             <button type="button" onClick={() => setAppStage('profileSetup')}>Keisti veikeja</button>
           </div>
@@ -2553,24 +2576,33 @@ function App() {
                 onDrop={handleCenterDrop}
               >
                 {payload.state.phase === 'DEALING' ? (
-                  <button
-                    type="button"
-                    className={canDrawFromCenterDeck ? 'centerDeckWrap deckClickable' : 'centerDeckWrap deckInactive'}
-                    onClick={drawFromCenterDeck}
-                  >
-                    <div className="deckShadow">{renderCardBack()}</div>
-                    <div className="deckFront">
-                      {payload.state.revealedDrawCard ? (
+                  <div className="centerDeckArea">
+                    <button
+                      type="button"
+                      className={canDrawFromCenterDeck ? 'centerDeckWrap deckClickable' : 'centerDeckWrap deckInactive'}
+                      onClick={drawFromCenterDeck}
+                    >
+                      <div className="deckShadow">{renderCardBack()}</div>
+                      <div className="deckFront">{renderCardBack()}</div>
+                      <span className="deckCount">Kalade: {payload.state.centerDeckCount}</span>
+                      <span className="deckHint">{deckStatusText}</span>
+                    </button>
+                    {payload.state.revealedDrawCard ? (
+                      <div
+                        className={isMyTurn && !flyingRevealedCard ? 'deckRevealOverlay draggableCard' : 'deckRevealOverlay'}
+                        draggable={isMyTurn && !flyingRevealedCard}
+                        onDragStart={(event) => {
+                          event.dataTransfer?.setData('text/plain', 'revealed-card')
+                          setIsRevealedCardDragged(true)
+                        }}
+                        onDragEnd={() => setIsRevealedCardDragged(false)}
+                      >
                         <div className="deckRevealAnim" key={cardLabel(payload.state.revealedDrawCard)}>
                           {renderVisualCard(payload.state.revealedDrawCard)}
                         </div>
-                      ) : (
-                        renderCardBack()
-                      )}
-                    </div>
-                    <span className="deckCount">Kalade: {payload.state.centerDeckCount}</span>
-                    <span className="deckHint">{deckStatusText}</span>
-                  </button>
+                      </div>
+                    ) : null}
+                  </div>
                 ) : null}
 
                 {payload.state.phase === 'PLAYING' ? (
@@ -2629,7 +2661,7 @@ function App() {
                   className={[
                     'tableSeat',
                     seat.isMe ? 'me' : '',
-                    draggedCardIndex !== null && payload.state.phase === 'DEALING' && isMyTurn ? 'dropTarget' : '',
+                    (draggedCardIndex !== null || isRevealedCardDragged) && payload.state.phase === 'DEALING' && isMyTurn ? 'dropTarget' : '',
                     seat.id === payload.state.currentTurnPlayerId ? 'activeTurn' : '',
                   ].filter(Boolean).join(' ')}
                   style={{ left: `${seat.x}%`, top: `${seat.y}%` }}
