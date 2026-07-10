@@ -56,7 +56,9 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-const AUTH_DB_PATH = resolve(process.cwd(), "data", "auth-users.db");
+const AUTH_DB_PATH = process.env.DATA_DIR
+  ? resolve(process.env.DATA_DIR, "auth-users.db")
+  : resolve(process.cwd(), "data", "auth-users.db");
 
 type AuthUser = {
   id: string;

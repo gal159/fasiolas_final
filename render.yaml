@@ -5,10 +5,18 @@ services:
     rootDir: server
     buildCommand: npm ci && npm run build
     startCommand: npm run start
+    disk:
+      name: fasiolas-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: APP_SECRET
         sync: false
       - key: CLIENT_URL
-        value: https://your-frontend-domain.vercel.app
+        value: https://lediniaisprendimai.com
+      - key: ALLOWED_ORIGINS
+        value: https://lediniaisprendimai.com,https://www.lediniaisprendimai.com
+      - key: DATA_DIR
+        value: /var/data
       - key: NODE_VERSION
         value: 22

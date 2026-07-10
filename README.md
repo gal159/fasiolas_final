@@ -79,15 +79,23 @@ Repo jau turi `render.yaml` su paruosu service konfiguracija.
 Zingsniai:
 1. Push i GitHub.
 2. Render dashboard pasirink `New` -> `Blueprint` ir prijunk repo.
-3. Sukurus servisa nustatyk env kintamuosius:
-  - `APP_SECRET` (privalomas, ilgas random tekstas)
-  - `CLIENT_URL` (tavo frontend URL, pvz. `https://your-frontend-domain.vercel.app`)
-  - `ALLOWED_ORIGINS` (frontend origin, pvz. `https://your-frontend-domain.vercel.app`)
-4. Deploy.
+3. `render.yaml` jau apibrezia pastovu disko (`disk`) mount'a `/var/data` su
+   `DATA_DIR=/var/data` env kintamuoju - tai reiskia, kad vartotoju paskyros
+   ir shop pirkiniai (NeDB failas) islieka po kiekvieno redeploy.
+4. Sukurus servisa nustatyk env kintamuosius:
+  - `APP_SECRET` (privalomas, ilgas random tekstas - `render.yaml` ji palieka
+    tuscia is anksto, uzpildyk Render dashboard'e)
+  - `CLIENT_URL` ir `ALLOWED_ORIGINS` jau nustatyti i
+    `https://lediniaisprendimai.com` (`render.yaml`) - pakeisk, jei naudosi
+    kitokia domena.
+5. Deploy.
 
 Patikra:
 - atsidaryk `https://your-render-service-url/health`
 - turi grazinti `{ "ok": true }`
+- po pirmo deploy padaryk testine registracija/pirkima, tada Render
+  dashboard'e paleisk "Manual Deploy" ir patikrink, kad paskyra bei pirkinys
+  islieka (patvirtina, kad pastovus diskas veikia)
 
 ### 2) Frontend i Vercel
 
@@ -97,8 +105,26 @@ Zingsniai:
 1. Vercel dashboard pasirink `Add New Project` ir prijunk ta pati repo.
 2. Root directory nustatyk i `client`.
 3. Environment Variables prideti:
-  - `VITE_SERVER_URL` = tavo Render backend URL (pvz. `https://your-render-service-url.onrender.com`)
+  - `VITE_SERVER_URL` = tavo Render backend URL (pvz. `https://fasiolas-server.onrender.com`)
 4. Deploy.
+
+### 2b) Savo domenas (pvz. Hostinger)
+
+Jei turi savo domena (pvz. `lediniaisprendimai.com`) ir nori ji prijungti
+prie Vercel frontend'o:
+
+1. Vercel projekte: `Settings` -> `Domains` -> prideti
+   `lediniaisprendimai.com` ir `www.lediniaisprendimai.com`.
+2. Vercel parodys reikiamus DNS irasus - paprastai:
+   - apex domenui (`lediniaisprendimai.com`): `A` irasas i Vercel nurodyta IP
+     (arba `ALIAS`/`ANAME`, jei Hostinger DNS tai palaiko)
+   - `www` subdomenui: `CNAME` -> `cname.vercel-dns.com`
+3. Hostinger valdymo skydelyje (Domains -> DNS / Name Servers) prideti sius
+   irasus tiksliai taip, kaip parode Vercel.
+4. Palauk DNS propagacijos (nuo keliu minuciu iki keliu valandu), Vercel
+   automatiskai isduos SSL sertifikata, kai domenas patvirtintas.
+5. Render aplinkoje atnaujink `CLIENT_URL` ir `ALLOWED_ORIGINS` i galutini
+   domena, jei jis skiriasi nuo pradinio `https://lediniaisprendimai.com`.
 
 ### 3) CORS ir reset nuorodos
 
