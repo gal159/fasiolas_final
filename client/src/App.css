@@ -3035,10 +3035,17 @@ button:disabled {
   padding: 0;
 }
 
+/* Uzrakina fono slinkima (ir pasleptas scrollbar), kol atidarytas stalo langas. */
+body:has(.tableWindowOverlay) {
+  overflow: hidden;
+}
+
 .tableWindow {
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -3048,6 +3055,7 @@ button:disabled {
   border-top: 0;
   margin: 0;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .tableWindow.panel {
@@ -3468,6 +3476,8 @@ button:disabled {
 .tableSeat.me {
   border: 0;
   background: transparent;
+  /* Sava vieta rišama prie apacios, kad niekada nebutu nukerpama. */
+  transform: translate(-50%, -100%);
 }
 
 .tableSeat.dropTarget {
@@ -3504,6 +3514,12 @@ button:disabled {
   margin-bottom: 0;
   position: relative;
   z-index: 6;
+}
+
+/* Scale palieka tuscia layout juosta po kortele - sutraukiam, kad
+   "Kortos: x" priglustu. Tik savo vietai: oponento kortos kyso apacioje. */
+.tableSeat.me .profileBadge.compact {
+  margin-bottom: -66px;
 }
 
 .tableSeat strong {
@@ -3855,8 +3871,16 @@ button:disabled {
   }
 
   .tableSeat .profileBadge.compact {
-    transform: scale(0.7);
+    transform: scale(0.66);
     margin-bottom: -42px;
+  }
+
+  .tableSeat.me .profileBadge.compact {
+    margin-bottom: -104px;
+  }
+
+  .meSeatIdentityRow {
+    margin-top: 36px;
   }
 
   .profileMeta {

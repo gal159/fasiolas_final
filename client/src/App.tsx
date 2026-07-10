@@ -1017,7 +1017,7 @@ function App() {
         cardCount: p.cardCount,
         topCard: p.topCard,
         x: 50 + Math.cos(angleRad) * radius.x,
-        y: 50 + Math.sin(angleRad) * radius.y,
+        y: p.id === payload.yourPlayerId ? 99 : 50 + Math.sin(angleRad) * radius.y,
         isMe: p.id === payload.yourPlayerId,
       }
     })
