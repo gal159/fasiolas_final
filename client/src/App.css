@@ -918,6 +918,28 @@ button:disabled {
   }
 }
 
+@media (max-width: 440px) {
+  .profileOnboarding {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .profileOnboardingStage {
+    gap: 8px;
+  }
+
+  .profileOnboardingCard {
+    zoom: 1;
+  }
+
+  .onboardingArrow {
+    width: 36px;
+    height: 36px;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+}
+
 .profileSetupMeta span {
   font-size: 12px;
   color: #c8e9ff;
@@ -5842,11 +5864,6 @@ header h1,
   box-shadow: 0 22px 48px rgba(6, 10, 45, 0.56), inset 0 0 0 1px rgba(176, 212, 255, 0.18) !important;
 }
 
-.profileWindow.panel.marketplaceWindow > * {
-  position: relative;
-  z-index: 1;
-}
-
 /* ─── Card Flip ──────────────────────────────────────────────────────────── */
 
 .flipCard {
@@ -7619,6 +7636,30 @@ button:active {
   margin-right: 18px;
   font-size: 18px;
   padding: 10px 16px;
+}
+
+@media (max-width: 720px) {
+  .page.mainMenuPage > header,
+  .page.mainMenuPage > .panel {
+    width: 100%;
+  }
+
+  .page.mainMenuPage {
+    padding: 12px;
+  }
+
+  .page.mainMenuPage > .panel {
+    padding: 16px;
+  }
+
+  .page.mainMenuPage .row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .page.mainMenuPage .row label {
+    padding-left: 2px;
+  }
 }
 
 @keyframes mainMenuTitlePulse {
