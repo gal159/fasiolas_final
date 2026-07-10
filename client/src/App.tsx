@@ -2472,7 +2472,7 @@ function App() {
                       .map((p) => (
                         <button
                           key={`dock-${p.id}`}
-                          disabled={!isMyTurn}
+                          disabled={Boolean(payload.state.pendingFasiolas)}
                           onClick={() => emitAck('accuse_fasiolas', { accusedPlayerId: p.id })}
                         >
                           Skusti {p.name}
