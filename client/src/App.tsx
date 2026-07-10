@@ -547,7 +547,6 @@ function App() {
   const [profileDraft, setProfileDraft] = useState<PlayerProfile>(withSlot(initialSlots.A, 'A'))
   const [selectedTargetId, setSelectedTargetId] = useState('')
   const [showTableWindow, setShowTableWindow] = useState(false)
-  const [showProfileWindow, setShowProfileWindow] = useState(false)
   const [showMarketplaceWindow, setShowMarketplaceWindow] = useState(false)
   const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null)
   const [playingHandSortMode, setPlayingHandSortMode] = useState<PlayingHandSortMode>('suit')
@@ -594,7 +593,7 @@ function App() {
     setProfileDraft(nextProfileDraft)
     setLoginError('')
     setError('')
-    setShowProfileWindow(false)
+    setShowMarketplaceWindow(false)
     setAppStage(bootstrap.hasCompletedProfileSetup ? 'hub' : 'profileSetup')
   }
 
@@ -821,31 +820,6 @@ function App() {
       return RARITY_PRICES[CARD_BACKGROUND_RARITY[id as PlayerProfile['cardBackgroundId']]]
     }
     return RARITY_PRICES[EFFECT_RARITY[id as PlayerProfile['effectId']]]
-  }
-
-  function itemRarity(type: ShopItemType, id: string): RarityId {
-    const item = findCatalogItem(type, id)
-    if (item) {
-      return item.rarity
-    }
-
-    if (type === 'avatar') {
-      return AVATAR_RARITY[id as PlayerProfile['avatarId']]
-    }
-    if (type === 'hat') {
-      return HAT_RARITY[id as PlayerProfile['hatId']]
-    }
-    if (type === 'skin') {
-      return SKIN_RARITY[id as PlayerProfile['skinId']]
-    }
-    if (type === 'background') {
-      return CARD_BACKGROUND_RARITY[id as PlayerProfile['cardBackgroundId']]
-    }
-    return EFFECT_RARITY[id as PlayerProfile['effectId']]
-  }
-
-  function isLocked(type: ShopItemType, id: string): boolean {
-    return !itemOwned(type, id)
   }
 
   function isItemEquipped(type: ShopItemType, id: string): boolean {
@@ -1375,12 +1349,6 @@ function App() {
     }
 
     setAppStage('hub')
-  }
-
-  function resetProfileDraft(): void {
-    const reset = createDefaultProfile(activeProfileSlot)
-    setProfileDraft(reset)
-    setProfileSlots((slots) => ({ ...slots, [activeProfileSlot]: reset }))
   }
 
   function allowDrop(event: DragEvent<HTMLElement>): void {
@@ -2172,7 +2140,7 @@ function App() {
     setRoomCode('')
     setRoomCodeInput('')
     setShowTableWindow(false)
-    setShowProfileWindow(false)
+    setShowMarketplaceWindow(false)
   }
 
   function returnToMainMenu(): void {
@@ -2186,7 +2154,6 @@ function App() {
     setRoomCode('')
     setRoomCodeInput('')
     setShowTableWindow(false)
-    setShowProfileWindow(false)
     setShowMarketplaceWindow(false)
     setDraggedCardIndex(null)
     setSelectedTargetId('')
@@ -2377,10 +2344,7 @@ function App() {
     <div className="page mainMenuPage">
       <header>
         <div className="headerRow">
-          <div>
-            <h1>Fasiolas</h1>
-            <p>Kortu zaidimo prototipas</p>
-          </div>
+          <h1 className="mainMenuAnimatedTitle">FASIOLAS</h1>
           <button type="button" onClick={handleLogout}>Atsijungti</button>
         </div>
       </header>
@@ -2424,7 +2388,6 @@ function App() {
           {renderFlippableCard(profilePanelProfile, true, name || me?.name, payload?.yourPlayerId ?? 'own')}
           <div className="actions">
             <button type="button" onClick={() => setAppStage('profileSetup')}>Keisti veikeja</button>
-            <button type="button" onClick={() => setShowProfileWindow(true)}>Atidaryti profilio langeli</button>
             <button type="button" onClick={() => { void saveProfile() }}>Issaugoti ir pritaikyti</button>
             <button type="button" onClick={() => setShowMarketplaceWindow(true)}>Marketplace</button>
           </div>
@@ -2452,193 +2415,21 @@ function App() {
         </section>
       ) : null}
 
-      {showProfileWindow ? (
-        <section className="profileWindowOverlay" role="dialog" aria-modal="true" aria-label="Profilio langelis">
-          <article className="profileWindow panel">
+      {showMarketplaceWindow ? (
+        <section className="profileWindowOverlay" role="dialog" aria-modal="true" aria-label="Marketplace">
+          <article className="profileWindow panel marketplaceWindow">
             <div className="profileWindowHeader">
-              <h2>Profilio langelis</h2>
-              <button type="button" onClick={() => setShowProfileWindow(false)}>Uzdaryti</button>
+              <h2>Marketplace</h2>
+              <button type="button" onClick={() => setShowMarketplaceWindow(false)}>Uzdaryti</button>
             </div>
 
-            <div className="profileWindowBody">
+            <div className="profileWindowBody marketplaceBody">
               <div className="loadoutStage">
-                {renderProfileBadge(profileDraft, false, name || me?.name)}
-                <p>Siame lange kuriamas tavo veikejo stilius ir issaugomas i pasirinkta lizda.</p>
+                {renderProfileBadge(profilePanelProfile, true, profilePanelDisplayName)}
               </div>
 
               <div className="customizationPanel">
-                <div className="slotSelector" role="tablist" aria-label="Profilio lizdai">
-                  {PROFILE_SLOT_OPTIONS.map((slot) => (
-                    <button
-                      key={slot}
-                      type="button"
-                      role="tab"
-                      aria-selected={activeProfileSlot === slot}
-                      className={activeProfileSlot === slot ? 'slotButton active' : 'slotButton'}
-                      onClick={() => setActiveProfileSlot(slot)}
-                    >
-                      Lizdas {slot}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="customizationGrid">
-                  <div className="row">
-                    <label htmlFor="card-background">Korteles fonas</label>
-                    <select
-                      id="card-background"
-                      value={profileDraft.cardBackgroundId}
-                      onChange={(event) => updateProfileDraft((current) => ({ ...current, cardBackgroundId: event.target.value as PlayerProfile['cardBackgroundId'] }))}
-                    >
-                      {CARD_BACKGROUND_OPTIONS.map((background) => {
-                        const rarity = itemRarity('background', background)
-                        const cost = itemCost('background', background)
-                        const locked = isLocked('background', background)
-                        return (
-                          <option key={background} value={background} disabled={locked}>
-                            {locked
-                              ? `${CARD_BACKGROUND_LABELS[background]} (${RARITY_LABELS[rarity]} ${cost} pts, locked)`
-                              : `${CARD_BACKGROUND_LABELS[background]} (${RARITY_LABELS[rarity]})`}
-                          </option>
-                        )
-                      })}
-                    </select>
-                  </div>
-
-                  <div className="row">
-                    <label htmlFor="avatar">Veikejas</label>
-                    <select
-                      id="avatar"
-                      value={profileDraft.avatarId}
-                      onChange={(event) => updateProfileDraft((current) => ({ ...current, avatarId: event.target.value as PlayerProfile['avatarId'] }))}
-                    >
-                      {AVATAR_OPTIONS.map((avatar) => {
-                        const rarity = itemRarity('avatar', avatar)
-                        const cost = itemCost('avatar', avatar)
-                        const locked = isLocked('avatar', avatar)
-                        return (
-                          <option key={avatar} value={avatar} disabled={locked}>
-                            {locked
-                              ? `${AVATAR_LABELS[avatar]} (${RARITY_LABELS[rarity]} ${cost} pts, locked)`
-                              : `${AVATAR_LABELS[avatar]} (${RARITY_LABELS[rarity]})`}
-                          </option>
-                        )
-                      })}
-                    </select>
-                  </div>
-
-                  <div className="row">
-                    <label htmlFor="hat">Kepure</label>
-                    <select
-                      id="hat"
-                      value={profileDraft.hatId}
-                      onChange={(event) => updateProfileDraft((current) => ({ ...current, hatId: event.target.value as PlayerProfile['hatId'] }))}
-                    >
-                      {HAT_OPTIONS.map((hat) => {
-                        const rarity = itemRarity('hat', hat)
-                        const cost = itemCost('hat', hat)
-                        const locked = isLocked('hat', hat)
-                        return (
-                          <option key={hat} value={hat} disabled={locked}>
-                            {locked
-                              ? `${HAT_LABELS[hat]} (${RARITY_LABELS[rarity]} ${cost} pts, locked)`
-                              : `${HAT_LABELS[hat]} (${RARITY_LABELS[rarity]})`}
-                          </option>
-                        )
-                      })}
-                    </select>
-                  </div>
-
-                  <div className="row">
-                    <label htmlFor="skin">Skin</label>
-                    <select
-                      id="skin"
-                      value={profileDraft.skinId}
-                      onChange={(event) => updateProfileDraft((current) => ({ ...current, skinId: event.target.value as PlayerProfile['skinId'] }))}
-                    >
-                      {SKIN_OPTIONS.map((skin) => {
-                        const rarity = itemRarity('skin', skin)
-                        const cost = itemCost('skin', skin)
-                        const locked = isLocked('skin', skin)
-                        return (
-                          <option key={skin} value={skin} disabled={locked}>
-                            {locked
-                              ? `${SKIN_LABELS[skin]} (${RARITY_LABELS[rarity]} ${cost} pts, locked)`
-                              : `${SKIN_LABELS[skin]} (${RARITY_LABELS[rarity]})`}
-                          </option>
-                        )
-                      })}
-                    </select>
-                  </div>
-
-                  <div className="row">
-                    <label htmlFor="effect">Efektas</label>
-                    <select
-                      id="effect"
-                      value={profileDraft.effectId}
-                      onChange={(event) => updateProfileDraft((current) => ({ ...current, effectId: event.target.value as PlayerProfile['effectId'] }))}
-                    >
-                      {EFFECT_OPTIONS.map((effect) => {
-                        const rarity = itemRarity('effect', effect)
-                        const cost = itemCost('effect', effect)
-                        const locked = isLocked('effect', effect)
-                        return (
-                          <option key={effect} value={effect} disabled={locked}>
-                            {locked
-                              ? `${EFFECT_LABELS[effect]} (${RARITY_LABELS[rarity]} ${cost} pts, locked)`
-                              : `${EFFECT_LABELS[effect]} (${RARITY_LABELS[rarity]})`}
-                          </option>
-                        )
-                      })}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="shopPanel" aria-label="Shop panel">
-                  <div className="shopPanelHeader">
-                    <strong>Shop</strong>
-                      <span>Taskai: {account.points} | Lygis: {accountLevel} | Total: {account.gamesPlayed}</span>
-                  </div>
-                  <p className="shopPanelHint">Kiekvienas match: +200 tasku visiems, Top3 bonusai: +200 / +100 / +50.</p>
-
-                  {SHOP_SECTION_ORDER.map((sectionType) => (
-                    <div key={sectionType} className="shopSection">
-                      <h4>{SHOP_SECTION_LABELS[sectionType]}</h4>
-                      <div className="shopItemsGrid">
-                        {shopByType[sectionType].length === 0 ? (
-                          <span className="shopLoadingHint">Katalogas kraunamas...</span>
-                        ) : null}
-                        {shopByType[sectionType].map((item) => {
-                          const owned = itemOwned(item.type, String(item.id))
-                          const canAfford = account.points >= item.cost
-                          const itemKey = `${item.type}:${String(item.id)}`
-                          const isPending = pendingShopKey === itemKey
-                          const label = SHOP_ITEM_LABELS[item.type][String(item.id)] ?? String(item.id)
-
-                          return (
-                            <article key={itemKey} className={`shopItemCard rarity-${item.rarity} ${owned ? 'owned' : 'locked'}`}>
-                              <div className="shopItemTop">
-                                <strong>{label}</strong>
-                                <span className="shopRarityChip">{RARITY_LABELS[item.rarity]}</span>
-                              </div>
-                              <div className="shopItemMeta">
-                                <span>{item.cost} pts</span>
-                                <span>{owned ? 'Owned' : 'Locked'}</span>
-                              </div>
-                              <button
-                                type="button"
-                                disabled={owned || !canAfford || isPending}
-                                onClick={() => buyShopItem(item.type, String(item.id))}
-                              >
-                                {owned ? 'Owned' : isPending ? 'Perkama...' : canAfford ? 'Pirkti' : 'Truksta tasku'}
-                              </button>
-                            </article>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                {renderMarketplacePanel('Marketplace', 'Kiekvienas match: +200 tasku visiems, Top3 bonusai: +200 / +100 / +50.')}
 
                 <div className="colorPickerRow">
                   <span>Pagrindine spalva</span>
@@ -2654,33 +2445,6 @@ function App() {
                     ))}
                   </div>
                 </div>
-              </div>
-            </div>
-
-            <div className="customizationFooter">
-              <button type="button" onClick={resetProfileDraft}>Atstatyti aktyvu lizda</button>
-              <button type="button" onClick={() => { void saveProfile() }}>Issaugoti ir pritaikyti</button>
-            </div>
-          </article>
-        </section>
-      ) : null}
-
-      {showMarketplaceWindow ? (
-        <section className="profileWindowOverlay" role="dialog" aria-modal="true" aria-label="Marketplace">
-          <article className="profileWindow panel marketplaceWindow">
-            <div className="profileWindowHeader">
-              <h2>Marketplace</h2>
-              <button type="button" onClick={() => setShowMarketplaceWindow(false)}>Uzdaryti</button>
-            </div>
-
-            <div className="profileWindowBody marketplaceBody">
-              <div className="loadoutStage">
-                {renderProfileBadge(profilePanelProfile, true, profilePanelDisplayName)}
-                <p>Is cia gali pirkti avatarus, kepures, skinus ir efektus uz savo taskus.</p>
-              </div>
-
-              <div className="customizationPanel">
-                {renderMarketplacePanel('Marketplace', 'Kiekvienas match: +200 tasku visiems, Top3 bonusai: +200 / +100 / +50.')}
               </div>
             </div>
           </article>

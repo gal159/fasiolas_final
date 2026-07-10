@@ -155,7 +155,7 @@ header,
   position: absolute;
   inset: 8px;
   border-radius: 9px;
-  background-size: cover;
+  background-size: contain;
   background-position: center;
   background-repeat: no-repeat;
   filter: saturate(1.08) contrast(1.03);
@@ -643,9 +643,16 @@ button:disabled {
   gap: 10px;
 }
 
+.profileQuickInfo strong {
+  font-size: 20px;
+  color: #fff6e0;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65), 0 0 12px rgba(255, 214, 128, 0.55);
+}
+
 .profileQuickInfo span {
-  font-size: 12px;
-  color: #9bc4e5;
+  font-size: 15px;
+  color: #eaf6ff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65), 0 0 8px rgba(140, 210, 255, 0.45);
 }
 
 .profileWindowOverlay {
@@ -687,9 +694,6 @@ button:disabled {
 .profileWindow {
   width: min(846px, 94vw);
   max-height: 92vh;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: 12px;
   overflow: auto;
   position: relative;
   z-index: 1;
@@ -918,35 +922,66 @@ button:disabled {
 }
 
 .marketplaceBody {
-  grid-template-columns: minmax(220px, 280px) 1fr;
-  border-radius: 12px;
-  padding: 10px;
+  grid-template-columns: minmax(220px, 300px) 1fr;
+  padding: 16px;
+  border-radius: 0 0 16px 16px;
   position: relative;
   isolation: isolate;
+  background: url('./assets/marketplace_background.png') center top / cover no-repeat;
 }
 
 .marketplaceWindow {
-  background: linear-gradient(165deg, rgba(9, 18, 34, 0.3), rgba(12, 20, 37, 0.42)) !important;
   position: relative;
   isolation: isolate;
+  padding: 0;
 }
 
-.marketplaceWindow::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 12px;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    linear-gradient(180deg, rgba(9, 18, 34, 0.18), rgba(9, 18, 34, 0.28)),
-    url('./assets/marketplace_background.png') center bottom / 100% 200% no-repeat;
-  background-attachment: scroll;
+.marketplaceWindow .profileWindowHeader {
+  padding: 16px 16px 0;
+  margin-bottom: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  border-radius: 16px 16px 0 0;
+  background: linear-gradient(165deg, rgba(9, 18, 34, 0.96), rgba(12, 20, 37, 0.98));
+  box-shadow: 0 6px 12px rgba(6, 10, 45, 0.4);
 }
 
 .marketplaceBody .loadoutStage {
-  background: linear-gradient(140deg, rgba(13, 32, 49, 0.46), rgba(10, 24, 39, 0.52));
-  border-color: rgba(141, 194, 238, 0.72);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  gap: 0;
+}
+
+.marketplaceBody .loadoutStage p {
+  display: none;
+}
+
+.marketplaceBody .loadoutStage .profileBadge.compact {
+  width: 290px;
+  padding: 10px;
+  gap: 8px;
+  border-radius: 20px;
+}
+
+.marketplaceBody .loadoutStage .profileBadge.compact .profileCardStage {
+  min-height: 220px;
+  padding-bottom: 30px;
+}
+
+.marketplaceBody .loadoutStage .profileBadge.compact .profileCardName {
+  font-size: 24px;
+}
+
+.marketplaceBody .loadoutStage .profileBadge.compact .profileCardTag {
+  font-size: 10px;
+  padding: 5px 7px;
+}
+
+.marketplaceBody .loadoutStage .profileBadge.compact .profileCardFooter {
+  font-size: 11px;
 }
 
 .marketplaceBody .shopPanel {
@@ -959,13 +994,11 @@ button:disabled {
 
 .loadoutStage {
   border-radius: 12px;
-  border: 1px solid #5c7d96;
-  background: linear-gradient(140deg, #172b39, #112433);
   padding: 10px;
   display: grid;
   gap: 8px;
   position: sticky;
-  top: 10px;
+  top: 70px;
   align-self: start;
 }
 
@@ -1172,16 +1205,6 @@ button:disabled {
 .colorSwatch.active {
   box-shadow: inset 0 0 0 1px rgba(28, 18, 7, 0.45), 0 0 0 2px #7e4a16, 0 0 10px rgba(255, 186, 84, 0.6);
   transform: scale(1.06);
-}
-
-.customizationFooter {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  border-top: 1px dashed #c3ad88;
-  padding-top: 10px;
 }
 
 .profileBadge {
@@ -3750,10 +3773,6 @@ button:disabled {
     width: 182px;
     right: -8px;
     font-size: 10px;
-  }
-
-  .customizationFooter {
-    justify-content: stretch;
   }
 
   .loadoutStage p {
@@ -6706,7 +6725,7 @@ header h1,
   position: absolute;
   inset: 8px;
   border-radius: 9px;
-  background-size: cover;
+  background-size: contain;
   background-position: center;
   background-repeat: no-repeat;
   filter: saturate(1.08) contrast(1.03);
@@ -7385,8 +7404,9 @@ header h1,
 }
 
 .levelProgressText {
-  font-size: 11px;
-  color: rgba(248, 232, 197, 0.78);
+  font-size: 14px;
+  color: #fff1cf;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65), 0 0 8px rgba(255, 214, 128, 0.5);
 }
 
 .statsTableWrap {
@@ -7440,9 +7460,39 @@ header h1,
     linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(248, 243, 234, 0.56)) !important;
 }
 
-.page.mainMenuPage .panel > *:not(.actions):not(.profileQuickPanel),
-.page.mainMenuPage .profileQuickPanel > *:not(.flipCard) {
-  opacity: 0.78;
+.page.mainMenuPage .panel,
+.page.mainMenuPage .profileQuickPanel,
+.page.mainMenuPage .row input {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(248, 243, 234, 0.56)) !important;
+}
+
+.page.mainMenuPage > .panel {
+  background: url('./assets/lobby_langas.png') center center / 100% 100% no-repeat !important;
+  padding: 28px;
+}
+
+.page.mainMenuPage .profileQuickPanel {
+  padding: 18px;
+  background: transparent !important;
+}
+.page.mainMenuPage .row {
+  grid-template-columns: 140px 1fr;
+  gap: 14px;
+}
+
+.page.mainMenuPage .row label {
+  color: #ffffff !important;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  padding-left: 8px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+}
+
+.page.mainMenuPage .row input {
+  font-size: 18px;
+  padding: 12px 14px;
 }
 
 .page.mainMenuPage button,
@@ -7506,4 +7556,80 @@ button:focus-visible,
 button:active {
   outline: none;
   box-shadow: none !important;
+}
+
+.page.mainMenuPage > header,
+.page.mainMenuPage > .panel {
+  width: min(1200px, calc(100vw - 200px));
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.page.mainMenuPage > header {
+  background: url('./assets/fasiolas.png') center / 100% 100% no-repeat !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #edf5ff !important;
+  padding: 26px 28px 24px;
+}
+
+.page.mainMenuPage > header .headerRow {
+  position: relative;
+  min-height: 120px;
+  justify-content: flex-end;
+}
+
+.page.mainMenuPage > header .mainMenuAnimatedTitle {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding-top: 10px;
+  margin: 0;
+  pointer-events: none;
+  font-family: "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  font-size: clamp(44px, 6.6vw, 102px);
+  line-height: 0.9;
+  letter-spacing: 0.1em;
+  font-weight: 900;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, #ffd6d6 0%, #ff4a64 48%, #c8002a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow:
+    0 0 10px rgba(255, 94, 128, 0.55),
+    0 0 24px rgba(255, 56, 92, 0.38),
+    0 4px 8px rgba(0, 0, 0, 0.45);
+  animation: mainMenuTitlePulse 2.3s ease-in-out infinite, mainMenuTitleGlow 3.2s linear infinite;
+}
+
+.page.mainMenuPage > header .headerRow > button {
+  position: relative;
+  z-index: 2;
+  margin-right: 18px;
+  font-size: 18px;
+  padding: 10px 16px;
+}
+
+@keyframes mainMenuTitlePulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+@keyframes mainMenuTitleGlow {
+  0% {
+    filter: hue-rotate(0deg) brightness(0.98);
+  }
+  50% {
+    filter: hue-rotate(-12deg) brightness(1.08);
+  }
+  100% {
+    filter: hue-rotate(0deg) brightness(0.98);
+  }
 }
