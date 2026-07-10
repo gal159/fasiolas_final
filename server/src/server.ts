@@ -658,6 +658,54 @@ app.post("/auth/purchase", async (req, res) => {
   }
 });
 
+const adminGrantPointsSchema = z.object({
+  email: z.string().trim().email(),
+  points: z.number().int().min(-1_000_000).max(1_000_000),
+});
+
+function isValidAdminSecret(provided: string): boolean {
+  const providedHash = createHash("sha256").update(provided).digest();
+  const expectedHash = createHash("sha256").update(APP_SECRET).digest();
+  return timingSafeEqual(providedHash, expectedHash);
+}
+
+app.post("/admin/grant-points", async (req, res) => {
+  const providedSecret = req.header("x-app-secret") ?? "";
+  if (!providedSecret || !isValidAdminSecret(providedSecret)) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const parsed = adminGrantPointsSchema.parse(req.body);
+    const email = normalizeEmail(parsed.email);
+    const storedUser = await authUsersDb.findOne({ email });
+
+    if (!storedUser) {
+      res.status(404).json({ ok: false, error: "Vartotojas nerastas" });
+      return;
+    }
+
+    const user = await hydrateAuthUser(storedUser);
+    const account = normalizeAccount(user.account);
+    account.points = Math.max(0, account.points + parsed.points);
+
+    await authUsersDb.update(
+      { id: user.id },
+      {
+        $set: {
+          account,
+          updatedAt: Date.now(),
+        },
+      },
+    );
+
+    res.json({ ok: true, email, points: account.points });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
 const playerCardInfoSchema = z.object({
   targetPlayerId: z.string().trim().uuid(),
 });
