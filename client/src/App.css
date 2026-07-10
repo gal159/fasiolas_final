@@ -375,6 +375,7 @@ header,
   margin: 0 auto;
   padding: 24px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   min-height: 100vh;
   position: relative;
@@ -7646,6 +7647,7 @@ button:active {
 
   .page.mainMenuPage {
     padding: 12px;
+    padding-bottom: 70px;
   }
 
   .page.mainMenuPage > .panel {
@@ -7659,6 +7661,24 @@ button:active {
 
   .page.mainMenuPage .row label {
     padding-left: 2px;
+  }
+
+  .page.mainMenuPage > header {
+    z-index: 40;
+  }
+
+  .page.mainMenuPage > header .headerRow {
+    min-height: 90px;
+  }
+
+  .page.mainMenuPage > header .headerRow > button {
+    position: fixed;
+    bottom: 12px;
+    left: 0;
+    right: 0;
+    margin: 0 auto;
+    width: fit-content;
+    z-index: 40;
   }
 }
 
