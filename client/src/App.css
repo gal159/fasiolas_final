@@ -135,57 +135,58 @@ header,
   transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
 }
 
-.playingCard.compact,
-.cardBack.compact {
-  width: 68px;
-  height: 96px;
-}
-
-.playingCard .corner {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  font-size: 13px;
-}
-
-.playingCard .centerSuit {
-  display: grid;
-  place-items: center;
-}
-
-.suitGlyph {
-  width: 1em;
-  height: 1em;
-  fill: currentColor;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.26));
-}
-
-.centerSuit .suitGlyph {
-  width: 38px;
-  height: 38px;
-}
-
-.playingCard.compact .centerSuit .suitGlyph {
-  width: 27px;
-  height: 27px;
-}
-
-.playingCard.compact .corner {
-  font-size: 10px;
-}
-
-.cardBack {
-  background:
-    radial-gradient(circle at 50% 50%, rgba(255, 214, 148, 0.16), transparent 56%),
-    repeating-linear-gradient(45deg, #5a3d2a 0 5px, #402b1d 5px 10px),
-    linear-gradient(180deg, #2d1d14, #1d120c);
-}
-
 .roundTableArea {
   background:
     radial-gradient(circle at center, #4f251d 0%, #351a14 40%, #20100d 100%);
 }
 
+
+/* Final avatar portrait layer: use uploaded images instead of mini character. */
+.profileBadge.has-avatar-art .profileCardStage {
+  position: relative;
+  overflow: hidden;
+}
+
+.profileBadge.has-avatar-art .profileCardBackdrop {
+  opacity: 0.3;
+}
+
+.profileBadge.has-avatar-art .avatarArtwork {
+  position: absolute;
+  inset: 8px;
+  border-radius: 9px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: saturate(1.08) contrast(1.03);
+  box-shadow: inset 0 0 0 1px rgba(255, 226, 170, 0.28);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.profileBadge.has-avatar-art .miniCharacter {
+  display: none !important;
+}
+
+.profileBadge.avatar-art-riteris .avatarArtwork {
+  background-image: linear-gradient(180deg, rgba(12, 8, 6, 0.1), rgba(12, 8, 6, 0.3)), url('/heroes/riteris.png');
+}
+
+.profileBadge.avatar-art-magas .avatarArtwork {
+  background-image: linear-gradient(180deg, rgba(10, 8, 16, 0.08), rgba(10, 8, 16, 0.28)), url('/heroes/magas.png');
+}
+
+.profileBadge.avatar-art-zudikas .avatarArtwork {
+  background-image: linear-gradient(180deg, rgba(8, 10, 12, 0.08), rgba(8, 10, 12, 0.3)), url('/heroes/zudikas.png');
+}
+
+.profileBadge.avatar-art-elfas .avatarArtwork {
+  background-image: linear-gradient(180deg, rgba(9, 12, 9, 0.08), rgba(9, 12, 9, 0.3)), url('/heroes/elfas.png');
+}
+
+.profileBadge.avatar-art-dzeusas .avatarArtwork {
+  background-image: linear-gradient(180deg, rgba(14, 10, 6, 0.08), rgba(14, 10, 6, 0.28)), url('/heroes/dzeusas.png');
+}
 .tableWindowOverlay {
   background:
     radial-gradient(circle at 84% 18%, rgba(206, 44, 44, 0.2), transparent 34%),
@@ -656,6 +657,7 @@ button:disabled {
   place-items: center;
   padding: 16px;
   overflow: hidden;
+  isolation: isolate;
 }
 
 .profileWindowOverlay::before,
@@ -664,6 +666,7 @@ button:disabled {
   position: absolute;
   inset: -30%;
   pointer-events: none;
+  z-index: 0;
 }
 
 .profileWindowOverlay::before {
@@ -689,11 +692,28 @@ button:disabled {
   gap: 12px;
   overflow: auto;
   position: relative;
+  z-index: 1;
   background:
     radial-gradient(circle at 12% 20%, rgba(102, 230, 255, 0.36), transparent 35%),
     radial-gradient(circle at 86% 84%, rgba(255, 166, 90, 0.34), transparent 40%),
     linear-gradient(180deg, rgba(50, 59, 152, 0.98), rgba(31, 39, 117, 0.99));
   box-shadow: 0 22px 48px rgba(6, 10, 45, 0.56);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.profileWindow::-webkit-scrollbar,
+.profileWindowBody::-webkit-scrollbar,
+.marketplaceBody::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.profileWindow,
+.profileWindowBody,
+.marketplaceBody {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .profileWindow::before {
@@ -899,20 +919,29 @@ button:disabled {
 
 .marketplaceBody {
   grid-template-columns: minmax(220px, 280px) 1fr;
-  background:
-    linear-gradient(160deg, rgba(10, 22, 36, 0.28), rgba(9, 18, 32, 0.34)),
-    url('./assets/marketplace_background.png');
-  background-size: auto, contain;
-  background-position: center, center;
-  background-repeat: repeat, no-repeat;
   border-radius: 12px;
   padding: 10px;
+  position: relative;
+  isolation: isolate;
 }
 
 .marketplaceWindow {
+  background: linear-gradient(165deg, rgba(9, 18, 34, 0.3), rgba(12, 20, 37, 0.42)) !important;
+  position: relative;
+  isolation: isolate;
+}
+
+.marketplaceWindow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  pointer-events: none;
+  z-index: 0;
   background:
-    linear-gradient(165deg, rgba(9, 18, 34, 0.3), rgba(12, 20, 37, 0.42)),
-    url('./assets/marketplace_background.png') center/contain no-repeat !important;
+    linear-gradient(180deg, rgba(9, 18, 34, 0.18), rgba(9, 18, 34, 0.28)),
+    url('./assets/marketplace_background.png') center bottom / 100% 200% no-repeat;
+  background-attachment: scroll;
 }
 
 .marketplaceBody .loadoutStage {
@@ -923,7 +952,8 @@ button:disabled {
 .marketplaceBody .shopPanel {
   background:
     radial-gradient(circle at 12% 8%, rgba(139, 232, 255, 0.12), transparent 36%),
-    linear-gradient(180deg, rgba(13, 33, 54, 0.62), rgba(8, 22, 38, 0.7));
+    linear-gradient(180deg, rgba(13, 33, 54, 0.56), rgba(8, 22, 38, 0.64)),
+    url('./assets/marketplace_background.png') center center / cover no-repeat;
   border-color: rgba(176, 212, 255, 0.66);
 }
 
@@ -4427,47 +4457,20 @@ button:hover:not(:disabled) {
   box-shadow: 0 0 10px rgba(234, 227, 210, 0.3);
 }
 
-/* Compact portrait mode: replace toy-like anatomy with mature hero bust silhouettes. */
+/* Compact portrait mode keeps the selected avatar visible and consistent with onboarding. */
 .profileBadge.compact .miniCharacter {
   width: 86px;
   height: 112px;
   position: relative;
-  isolation: isolate;
 }
 
 .profileBadge.compact .miniCharacter > * {
-  display: none;
-}
-
-.profileBadge.compact .miniCharacter .miniAura {
   display: block;
-  inset: 6px 10px 16px;
 }
 
 .profileBadge.compact .miniCharacter::before,
 .profileBadge.compact .miniCharacter::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  pointer-events: none;
-}
-
-.profileBadge.compact .miniCharacter::before {
-  top: 10px;
-  width: 60px;
-  height: 88px;
-  border-radius: 30px 30px 14px 14px;
-  border: 2px solid rgba(16, 16, 20, 0.78);
-  box-shadow: 0 10px 14px rgba(0, 0, 0, 0.32);
-}
-
-.profileBadge.compact .miniCharacter::after {
-  top: 22px;
-  width: 22px;
-  height: 7px;
-  border-radius: 999px;
-  background: rgba(231, 241, 248, 0.86);
+  content: none;
 }
 
 .profileBadge.compact .miniCharacter.avatarStyle-zeus::before {
@@ -5806,11 +5809,14 @@ header h1,
 /* Keep marketplace panel image visible over global .panel white theme overrides. */
 .profileWindow.panel.marketplaceWindow {
   color: #eef7ff !important;
-  background:
-    linear-gradient(165deg, rgba(9, 18, 34, 0.3), rgba(12, 20, 37, 0.42)),
-    url('./assets/marketplace_background.png') center/contain no-repeat !important;
+  background: linear-gradient(165deg, rgba(9, 18, 34, 0.3), rgba(12, 20, 37, 0.42)) !important;
   border-color: rgba(176, 212, 255, 0.66) !important;
   box-shadow: 0 22px 48px rgba(6, 10, 45, 0.56), inset 0 0 0 1px rgba(176, 212, 255, 0.18) !important;
+}
+
+.profileWindow.panel.marketplaceWindow > * {
+  position: relative;
+  z-index: 1;
 }
 
 /* ─── Card Flip ──────────────────────────────────────────────────────────── */
@@ -6288,7 +6294,7 @@ header h1,
 
 .cardBackStats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 5px;
   width: 100%;
   min-width: 0;
@@ -6299,15 +6305,15 @@ header h1,
 
 .cardBackStat {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: 3px;
   min-width: 0;
-  padding: 6px 4px 5px;
+  padding: 8px 11px 7px;
   border-radius: 8px;
-  background: linear-gradient(180deg, rgba(255, 92, 92, 0.18), rgba(110, 0, 0, 0.18));
-  border: 1px solid rgba(255, 108, 108, 0.3);
+  background: linear-gradient(180deg, rgba(255, 92, 92, 0.3), rgba(110, 0, 0, 0.34));
+  border: 1px solid rgba(255, 108, 108, 0.48);
   animation: statSlideIn 380ms ease both, cardBoxBlink 1.05s ease-in-out infinite;
   z-index: 5;
 }
@@ -6326,28 +6332,28 @@ header h1,
 
 .cardBackStatVal {
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 17px;
+  font-size: 20px;
   font-weight: 700;
   line-height: 1;
   color: #fff4f4;
-  text-shadow: 0 0 10px rgba(255, 64, 64, 0.62);
+  text-shadow:
+    0 0 10px rgba(255, 64, 64, 0.72),
+    0 0 18px rgba(255, 192, 192, 0.2);
 }
 
 .cardBackStat.win .cardBackStatVal {
   color: #ff8b8b;
 }
 
-.cardBackStat.loss .cardBackStatVal {
-  color: #ff5a5a;
-}
-
 .cardBackStatLabel {
-  font-size: 8px;
+  font-size: 12px;
   line-height: 1.1;
   text-transform: uppercase;
-  letter-spacing: 0.35px;
+  letter-spacing: 0.6px;
   color: rgba(255, 222, 222, 0.96);
-  text-shadow: 0 0 6px rgba(255, 80, 80, 0.28);
+  text-shadow:
+    0 0 6px rgba(255, 80, 80, 0.34),
+    0 0 12px rgba(255, 118, 118, 0.16);
 }
 
 .flipCard.compact .cardBackStats {
@@ -6355,17 +6361,17 @@ header h1,
 }
 
 .flipCard.compact .cardBackStat {
-  padding: 5px 3px 4px;
+  padding: 7px 9px 6px;
   border-radius: 6px;
 }
 
 .flipCard.compact .cardBackStatVal {
-  font-size: 14px;
+  font-size: 17px;
 }
 
 .flipCard.compact .cardBackStatLabel {
-  font-size: 6px;
-  letter-spacing: 0.2px;
+  font-size: 9px;
+  letter-spacing: 0.4px;
 }
 
 .cardBackAchievements {
@@ -6685,6 +6691,53 @@ header h1,
     background-position: 0 0, 0 0, 0 0;
   }
   50% {
+
+/* Final avatar portrait layer: use uploaded images instead of mini character. */
+.profileBadge.has-avatar-art .profileCardStage {
+  position: relative;
+  overflow: hidden;
+}
+
+.profileBadge.has-avatar-art .profileCardBackdrop {
+  opacity: 0.3;
+}
+
+.profileBadge.has-avatar-art .avatarArtwork {
+  position: absolute;
+  inset: 8px;
+  border-radius: 9px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: saturate(1.08) contrast(1.03);
+  box-shadow: inset 0 0 0 1px rgba(255, 226, 170, 0.28);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.profileBadge.has-avatar-art .miniCharacter {
+  display: none;
+}
+
+.profileBadge.avatar-art-riteris .avatarArtwork {
+  background-image: linear-gradient(180deg, rgba(12, 8, 6, 0.1), rgba(12, 8, 6, 0.3)), url('/heroes/riteris.png');
+}
+
+.profileBadge.avatar-art-magas .avatarArtwork {
+  background-image: linear-gradient(180deg, rgba(10, 8, 16, 0.08), rgba(10, 8, 16, 0.28)), url('/heroes/magas.png');
+}
+
+.profileBadge.avatar-art-zudikas .avatarArtwork {
+  background-image: linear-gradient(180deg, rgba(8, 10, 12, 0.08), rgba(8, 10, 12, 0.3)), url('/heroes/zudikas.png');
+}
+
+.profileBadge.avatar-art-elfas .avatarArtwork {
+  background-image: linear-gradient(180deg, rgba(9, 12, 9, 0.08), rgba(9, 12, 9, 0.3)), url('/heroes/elfas.png');
+}
+
+.profileBadge.avatar-art-dzeusas .avatarArtwork {
+  background-image: linear-gradient(180deg, rgba(14, 10, 6, 0.08), rgba(14, 10, 6, 0.28)), url('/heroes/dzeusas.png');
+}
     opacity: 0.42;
     transform: translateY(2px);
     background-position: 0 6px, 0 10px, 0 0;

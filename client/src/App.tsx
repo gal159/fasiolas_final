@@ -38,10 +38,10 @@ const RESET_TOKEN_QUERY_KEY = 'resetToken'
 
 const AVATAR_LABELS: Record<PlayerProfile['avatarId'], string> = {
   zeus: 'Dzeusas',
-  warrior: 'Karys',
+  warrior: 'Riteris',
   mage: 'Magas',
-  ronin: 'Roninas',
-  guardian: 'Sventoves sargas',
+  ronin: 'Zudikas',
+  guardian: 'Elfas',
 }
 
 const HAT_LABELS: Record<PlayerProfile['hatId'], string> = {
@@ -81,18 +81,26 @@ const CARD_BACKGROUND_LABELS: Record<PlayerProfile['cardBackgroundId'], string> 
 
 const AVATAR_ELEMENT_LABELS: Record<PlayerProfile['avatarId'], string> = {
   zeus: 'Sky',
-  warrior: 'Steel',
+  warrior: 'Valor',
   mage: 'Arcane',
-  ronin: 'Wind',
-  guardian: 'Stone',
+  ronin: 'Shadow',
+  guardian: 'Nature',
 }
 
 const AVATAR_THEME_LABELS: Record<PlayerProfile['avatarId'], string> = {
   zeus: 'Olympus Court',
-  warrior: 'Arena Vanguard',
+  warrior: 'Iron Oath',
   mage: 'Mystic Order',
-  ronin: 'Crimson Dojo',
-  guardian: 'Temple Ward',
+  ronin: 'Night Veil',
+  guardian: 'Forest Ward',
+}
+
+const AVATAR_ART_CLASS: Record<PlayerProfile['avatarId'], string> = {
+  zeus: 'dzeusas',
+  warrior: 'riteris',
+  mage: 'magas',
+  ronin: 'zudikas',
+  guardian: 'elfas',
 }
 
 const RARITY_LABELS: Record<RarityId, string> = {
@@ -1691,9 +1699,10 @@ function App() {
       '--profile-accent-soft': hexToRgba(profile.baseColor, compact ? 0.2 : 0.28),
     } as CSSProperties
 
+    const avatarArtClass = AVATAR_ART_CLASS[profile.avatarId]
     const badgeClass = compact
-      ? `profileBadge compact fx-${profile.effectId} avatar-${profile.avatarId} bg-${profile.cardBackgroundId}${options?.isFlipping ? ' is-flipping' : ''}${options?.onClick ? ' is-clickable' : ''}`
-      : `profileBadge fx-${profile.effectId} avatar-${profile.avatarId} bg-${profile.cardBackgroundId}${options?.isFlipping ? ' is-flipping' : ''}${options?.onClick ? ' is-clickable' : ''}`
+      ? `profileBadge compact fx-${profile.effectId} avatar-${profile.avatarId} avatar-art-${avatarArtClass} has-avatar-art bg-${profile.cardBackgroundId}${options?.isFlipping ? ' is-flipping' : ''}${options?.onClick ? ' is-clickable' : ''}`
+      : `profileBadge fx-${profile.effectId} avatar-${profile.avatarId} avatar-art-${avatarArtClass} has-avatar-art bg-${profile.cardBackgroundId}${options?.isFlipping ? ' is-flipping' : ''}${options?.onClick ? ' is-clickable' : ''}`
 
     const isInteractive = Boolean(options?.onClick)
 
@@ -1729,6 +1738,7 @@ function App() {
 
         <div className="profileCardStage">
           <div className="profileCardBackdrop" />
+          <div className="avatarArtwork" aria-hidden="true" />
           <div className={compact ? `miniCharacter compact avatarStyle-${profile.avatarId}` : `miniCharacter avatarStyle-${profile.avatarId}`}>
             <div className={`miniAura effect-${profile.effectId}`} />
             <div className={`miniHat hat-${profile.hatId}`} />
@@ -1925,15 +1935,11 @@ function App() {
                   <div className="cardBackStats">
                     <div className="cardBackStat">
                       <span className="cardBackStatVal">{info.gamesPlayed}</span>
-                      <span className="cardBackStatLabel">Total</span>
+                      <span className="cardBackStatLabel">Suzaista</span>
                     </div>
                     <div className="cardBackStat win">
                       <span className="cardBackStatVal">{info.gamesWon}</span>
-                      <span className="cardBackStatLabel">Laimeta game</span>
-                    </div>
-                    <div className="cardBackStat loss">
-                      <span className="cardBackStatVal">{info.gamesLost}</span>
-                      <span className="cardBackStatLabel">Pralaimeta game</span>
+                      <span className="cardBackStatLabel">Laimeta</span>
                     </div>
                   </div>
                   <div className="cardBackAchievements" aria-label="Achievements">

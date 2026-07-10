@@ -74,7 +74,7 @@ export const AVATAR_RARITY: Record<AvatarId, RarityId> = {
   warrior: "common",
   mage: "common",
   ronin: "common",
-  guardian: "rare",
+  guardian: "common",
 };
 
 export const HAT_RARITY: Record<HatId, RarityId> = {
