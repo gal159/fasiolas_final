@@ -2388,8 +2388,6 @@ function App() {
           {renderFlippableCard(profilePanelProfile, true, name || me?.name, payload?.yourPlayerId ?? 'own')}
           <div className="actions">
             <button type="button" onClick={() => setAppStage('profileSetup')}>Keisti veikeja</button>
-            <button type="button" onClick={() => { void saveProfile() }}>Issaugoti ir pritaikyti</button>
-            <button type="button" onClick={() => setShowMarketplaceWindow(true)}>Marketplace</button>
           </div>
         </div>
 
@@ -2401,7 +2399,7 @@ function App() {
           <article className="profileWindow panel marketplaceWindow">
             <div className="profileWindowHeader">
               <h2>Marketplace</h2>
-              <button type="button" onClick={() => setShowMarketplaceWindow(false)}>Uzdaryti</button>
+              <button type="button" onClick={() => { setShowMarketplaceWindow(false); void saveProfile() }}>Uzdaryti</button>
             </div>
 
             <div className="profileWindowBody marketplaceBody">
@@ -2628,15 +2626,12 @@ function App() {
                     }
                     tableSeatRefs.current.set(seat.id, element)
                   }}
-                  className={
-                    draggedCardIndex !== null && payload.state.phase === 'DEALING' && isMyTurn
-                      ? seat.isMe
-                        ? 'tableSeat me dropTarget'
-                        : 'tableSeat dropTarget'
-                      : seat.isMe
-                        ? 'tableSeat me'
-                        : 'tableSeat'
-                  }
+                  className={[
+                    'tableSeat',
+                    seat.isMe ? 'me' : '',
+                    draggedCardIndex !== null && payload.state.phase === 'DEALING' && isMyTurn ? 'dropTarget' : '',
+                    seat.id === payload.state.currentTurnPlayerId ? 'activeTurn' : '',
+                  ].filter(Boolean).join(' ')}
                   style={{ left: `${seat.x}%`, top: `${seat.y}%` }}
                   onDragOver={allowDrop}
                   onDrop={() => handleSeatDrop(seat.id)}
