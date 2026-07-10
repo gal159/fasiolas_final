@@ -2172,7 +2172,7 @@ function App() {
 
   if (appStage === 'auth') {
     return (
-      <div className="page">
+      <div className="page authPage">
         <section className="panel loginPanel">
           <h1>Prisijungimas</h1>
           <p className="loginHint">El. pastas naudojamas prisijungimui ir slaptazodzio atstatymui</p>

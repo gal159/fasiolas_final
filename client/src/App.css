@@ -7642,3 +7642,49 @@ button:active {
     filter: hue-rotate(0deg) brightness(0.98);
   }
 }
+
+/* Auth (login/register) page: themed magical courtyard backdrop. */
+.page.authPage {
+  width: 100vw;
+  max-width: none !important;
+  margin: 0 !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    linear-gradient(rgba(6, 4, 20, 0.35), rgba(6, 4, 20, 0.45)),
+    url('./assets/login_bg.png') center / cover no-repeat !important;
+}
+
+.page.authPage .loginPanel {
+  width: min(460px, 92vw);
+  margin: 0;
+  color: #f1e6ff !important;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(148, 110, 255, 0.28), transparent 40%),
+    radial-gradient(circle at 88% 92%, rgba(255, 200, 120, 0.18), transparent 40%),
+    linear-gradient(165deg, rgba(20, 14, 38, 0.94), rgba(12, 9, 26, 0.96)) !important;
+  border: 2px solid rgba(196, 158, 255, 0.5) !important;
+  box-shadow: 0 22px 48px rgba(4, 2, 16, 0.6), inset 0 0 0 1px rgba(216, 190, 255, 0.16) !important;
+}
+
+.page.authPage .loginPanel h1 {
+  color: #f8ecff !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7), 0 0 14px rgba(178, 130, 255, 0.55);
+}
+
+.page.authPage .loginPanel .loginHint {
+  color: #cdb8f5 !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.page.authPage .loginPanel .row label {
+  color: #e7dcff !important;
+}
+
+.page.authPage .loginPanel .error {
+  color: #ff9d9d !important;
+}
