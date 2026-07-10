@@ -15,7 +15,7 @@ services:
       - key: CLIENT_URL
         value: https://lediniaisprendimai.com
       - key: ALLOWED_ORIGINS
-        value: https://lediniaisprendimai.com,https://www.lediniaisprendimai.com
+        value: https://lediniaisprendimai.com,https://www.lediniaisprendimai.com,https://fasiolas-final.vercel.app
       - key: DATA_DIR
         value: /var/data
       - key: NODE_VERSION

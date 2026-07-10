@@ -709,6 +709,29 @@ function App() {
   }, [activeProfileSlot, profileSlots])
 
   useEffect(() => {
+    if (appStage !== 'profileSetup') {
+      return
+    }
+    const commonAvatars = AVATAR_OPTIONS.filter((avatar) => AVATAR_RARITY[avatar] === 'common')
+    if (commonAvatars.length === 0) {
+      return
+    }
+    function handleSetupKeys(event: KeyboardEvent): void {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+        return
+      }
+      const direction = event.key === 'ArrowLeft' ? -1 : 1
+      updateProfileDraft((current) => {
+        const index = Math.max(0, commonAvatars.indexOf(current.avatarId))
+        const nextAvatar = commonAvatars[(index + direction + commonAvatars.length) % commonAvatars.length]
+        return { ...current, avatarId: nextAvatar }
+      })
+    }
+    window.addEventListener('keydown', handleSetupKeys)
+    return () => window.removeEventListener('keydown', handleSetupKeys)
+  }, [appStage])
+
+  useEffect(() => {
     if (!payload) {
       return
     }
@@ -2294,211 +2317,50 @@ function App() {
   }
 
   if (appStage === 'profileSetup') {
+    const commonAvatars = AVATAR_OPTIONS.filter((avatar) => AVATAR_RARITY[avatar] === 'common')
+    const currentAvatarIndex = Math.max(0, commonAvatars.indexOf(profileDraft.avatarId))
+    const cycleSetupAvatar = (direction: -1 | 1): void => {
+      if (commonAvatars.length === 0) {
+        return
+      }
+      const nextAvatar = commonAvatars[(currentAvatarIndex + direction + commonAvatars.length) % commonAvatars.length]
+      updateProfileDraft((current) => ({ ...current, avatarId: nextAvatar }))
+    }
+
     return (
-      <div className="page profileSetupPage">
-        <section className="profileWindow panel profileSetupPanel">
-          <div className="profileWindowHeader profileSetupHeader">
-            <div>
-              <h1>Sukurk savo profili</h1>
-              <p>Pasirink aktyvu herojaus stiliu. Si zingsni pamatysi tik pirma karta prisijunges.</p>
-            </div>
-            <div className="profileSetupMeta">
-              <strong>{name || displayNameFromEmail(authEmail)}</strong>
-              <span>Slotas {activeProfileSlot} | Taskai {account.points}</span>
-            </div>
-          </div>
+      <div className="page profileOnboardingPage">
+        <section className="profileOnboarding">
+          <header className="profileOnboardingHeader">
+            <h1>Pasirink savo veikeja</h1>
+            <p>Rodyklemis issirink savo heroju. Kitas korteles dalis atrakinsi ir keisi marketplace.</p>
+          </header>
 
-          <div className="profileWindowBody">
-            <div className="loadoutStage">
+          <div className="profileOnboardingStage">
+            <button type="button" className="onboardingArrow" aria-label="Ankstesnis veikejas" onClick={() => cycleSetupAvatar(-1)}>&#8249;</button>
+            <div className="profileOnboardingCard">
               {renderProfileBadge(profileDraft, false, name || displayNameFromEmail(authEmail))}
-              <p>Susikurk pradine isvaizda dabar. Veliau galesi grizti, keisti slotus ir naudoti marketplace kosmetikas.</p>
             </div>
-
-            <div className="customizationPanel">
-              <div className="slotSelector" role="tablist" aria-label="Profilio lizdai">
-                {PROFILE_SLOT_OPTIONS.map((slot) => (
-                  <button
-                    key={slot}
-                    type="button"
-                    role="tab"
-                    aria-selected={activeProfileSlot === slot}
-                    className={activeProfileSlot === slot ? 'slotButton active' : 'slotButton'}
-                    onClick={() => setActiveProfileSlot(slot)}
-                  >
-                    Lizdas {slot}
-                  </button>
-                ))}
-              </div>
-
-              <div className="customizationGrid">
-                <div className="row">
-                  <label htmlFor="setup-card-background">Korteles fonas</label>
-                  <select
-                    id="setup-card-background"
-                    value={profileDraft.cardBackgroundId}
-                    onChange={(event) => updateProfileDraft((current) => ({ ...current, cardBackgroundId: event.target.value as PlayerProfile['cardBackgroundId'] }))}
-                  >
-                    {CARD_BACKGROUND_OPTIONS.map((background) => {
-                      const rarity = itemRarity('background', background)
-                      const cost = itemCost('background', background)
-                      const locked = isLocked('background', background)
-                      return (
-                        <option key={background} value={background} disabled={locked}>
-                          {locked
-                            ? `${CARD_BACKGROUND_LABELS[background]} (${RARITY_LABELS[rarity]} ${cost} pts, locked)`
-                            : `${CARD_BACKGROUND_LABELS[background]} (${RARITY_LABELS[rarity]})`}
-                        </option>
-                      )
-                    })}
-                  </select>
-                </div>
-
-                <div className="row">
-                  <label htmlFor="setup-avatar">Veikejas</label>
-                  <select
-                    id="setup-avatar"
-                    value={profileDraft.avatarId}
-                    onChange={(event) => updateProfileDraft((current) => ({ ...current, avatarId: event.target.value as PlayerProfile['avatarId'] }))}
-                  >
-                    {AVATAR_OPTIONS.map((avatar) => {
-                      const rarity = itemRarity('avatar', avatar)
-                      const cost = itemCost('avatar', avatar)
-                      const locked = isLocked('avatar', avatar)
-                      return (
-                        <option key={avatar} value={avatar} disabled={locked}>
-                          {locked
-                            ? `${AVATAR_LABELS[avatar]} (${RARITY_LABELS[rarity]} ${cost} pts, locked)`
-                            : `${AVATAR_LABELS[avatar]} (${RARITY_LABELS[rarity]})`}
-                        </option>
-                      )
-                    })}
-                  </select>
-                </div>
-
-                <div className="row">
-                  <label htmlFor="setup-hat">Kepure</label>
-                  <select
-                    id="setup-hat"
-                    value={profileDraft.hatId}
-                    onChange={(event) => updateProfileDraft((current) => ({ ...current, hatId: event.target.value as PlayerProfile['hatId'] }))}
-                  >
-                    {HAT_OPTIONS.map((hat) => {
-                      const rarity = itemRarity('hat', hat)
-                      const cost = itemCost('hat', hat)
-                      const locked = isLocked('hat', hat)
-                      return (
-                        <option key={hat} value={hat} disabled={locked}>
-                          {locked
-                            ? `${HAT_LABELS[hat]} (${RARITY_LABELS[rarity]} ${cost} pts, locked)`
-                            : `${HAT_LABELS[hat]} (${RARITY_LABELS[rarity]})`}
-                        </option>
-                      )
-                    })}
-                  </select>
-                </div>
-
-                <div className="row">
-                  <label htmlFor="setup-skin">Skin</label>
-                  <select
-                    id="setup-skin"
-                    value={profileDraft.skinId}
-                    onChange={(event) => updateProfileDraft((current) => ({ ...current, skinId: event.target.value as PlayerProfile['skinId'] }))}
-                  >
-                    {SKIN_OPTIONS.map((skin) => {
-                      const rarity = itemRarity('skin', skin)
-                      const cost = itemCost('skin', skin)
-                      const locked = isLocked('skin', skin)
-                      return (
-                        <option key={skin} value={skin} disabled={locked}>
-                          {locked
-                            ? `${SKIN_LABELS[skin]} (${RARITY_LABELS[rarity]} ${cost} pts, locked)`
-                            : `${SKIN_LABELS[skin]} (${RARITY_LABELS[rarity]})`}
-                        </option>
-                      )
-                    })}
-                  </select>
-                </div>
-
-                <div className="row">
-                  <label htmlFor="setup-effect">Efektas</label>
-                  <select
-                    id="setup-effect"
-                    value={profileDraft.effectId}
-                    onChange={(event) => updateProfileDraft((current) => ({ ...current, effectId: event.target.value as PlayerProfile['effectId'] }))}
-                  >
-                    {EFFECT_OPTIONS.map((effect) => {
-                      const rarity = itemRarity('effect', effect)
-                      const cost = itemCost('effect', effect)
-                      const locked = isLocked('effect', effect)
-                      return (
-                        <option key={effect} value={effect} disabled={locked}>
-                          {locked
-                            ? `${EFFECT_LABELS[effect]} (${RARITY_LABELS[rarity]} ${cost} pts, locked)`
-                            : `${EFFECT_LABELS[effect]} (${RARITY_LABELS[rarity]})`}
-                        </option>
-                      )
-                    })}
-                  </select>
-                </div>
-              </div>
-
-              <div className="shopPanel" aria-label="Marketplace preview panel">
-                <div className="shopPanelHeader">
-                  <strong>Marketplace preview</strong>
-                  <span>Taskai: {account.points} | Zaidimai: {account.gamesPlayed}</span>
-                </div>
-                <p className="shopPanelHint">Siame bloke jau naudosime tas pacias kosmetikas, kurios veliau persikels i atskira marketplace puslapi.</p>
-
-                {SHOP_SECTION_ORDER.map((sectionType) => (
-                  <div key={sectionType} className="shopSection">
-                    <h4>{SHOP_SECTION_LABELS[sectionType]}</h4>
-                    <div className="shopItemsGrid">
-                      {shopByType[sectionType].length === 0 ? (
-                        <span className="shopLoadingHint">Katalogas kraunamas...</span>
-                      ) : null}
-                      {shopByType[sectionType].map((item) => {
-                        const owned = itemOwned(item.type, String(item.id))
-                        const label = SHOP_ITEM_LABELS[item.type][String(item.id)] ?? String(item.id)
-
-                        return (
-                          <article key={`${item.type}:${String(item.id)}`} className={`shopItemCard rarity-${item.rarity} ${owned ? 'owned' : 'locked'}`}>
-                            <div className="shopItemTop">
-                              <strong>{label}</strong>
-                              <span className="shopRarityChip">{RARITY_LABELS[item.rarity]}</span>
-                            </div>
-                            <div className="shopItemMeta">
-                              <span>{item.cost} pts</span>
-                              <span>{owned ? 'Owned' : 'Locked'}</span>
-                            </div>
-                          </article>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="colorPickerRow">
-                <span>Pagrindine spalva</span>
-                <div className="colorSwatches">
-                  {PROFILE_COLOR_OPTIONS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      className={profileDraft.baseColor === color ? 'colorSwatch active' : 'colorSwatch'}
-                      style={{ backgroundColor: color }}
-                      onClick={() => updateProfileDraft((current) => ({ ...current, baseColor: color }))}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
+            <button type="button" className="onboardingArrow" aria-label="Kitas veikejas" onClick={() => cycleSetupAvatar(1)}>&#8250;</button>
           </div>
 
-          <div className="customizationFooter">
-            <button type="button" onClick={resetProfileDraft}>Atstatyti aktyvu lizda</button>
-            <button type="button" onClick={() => { void completeProfileSetup() }}>Testi i zaidimo centra</button>
+          <div className="profileOnboardingAvatarName">{AVATAR_LABELS[profileDraft.avatarId]}</div>
+
+          <div className="profileOnboardingDots">
+            {commonAvatars.map((avatar, index) => (
+              <button
+                key={avatar}
+                type="button"
+                className={index === currentAvatarIndex ? 'onboardingDot active' : 'onboardingDot'}
+                aria-label={AVATAR_LABELS[avatar]}
+                aria-pressed={index === currentAvatarIndex}
+                onClick={() => updateProfileDraft((current) => ({ ...current, avatarId: avatar }))}
+              />
+            ))}
           </div>
+
+          <button type="button" className="profileOnboardingConfirm" onClick={() => { void completeProfileSetup() }}>
+            Testi i zaidimo centra
+          </button>
           {error ? <div className="error">{error}</div> : null}
         </section>
       </div>
@@ -2555,6 +2417,7 @@ function App() {
           </div>
           {renderFlippableCard(profilePanelProfile, true, name || me?.name, payload?.yourPlayerId ?? 'own')}
           <div className="actions">
+            <button type="button" onClick={() => setAppStage('profileSetup')}>Keisti veikeja</button>
             <button type="button" onClick={() => setShowProfileWindow(true)}>Atidaryti profilio langeli</button>
             <button type="button" onClick={() => { void saveProfile() }}>Issaugoti ir pritaikyti</button>
             <button type="button" onClick={() => setShowMarketplaceWindow(true)}>Marketplace</button>
