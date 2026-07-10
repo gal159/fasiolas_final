@@ -4159,14 +4159,14 @@ button:hover:not(:disabled) {
 }
 
 .tableSeat {
-  border-color: rgba(245, 208, 141, 0.36);
-  background: linear-gradient(180deg, rgba(37, 25, 18, 0.96), rgba(23, 16, 12, 0.96));
-  box-shadow: 0 14px 24px rgba(0, 0, 0, 0.35);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 .tableSeat.me {
-  border-color: rgba(255, 227, 161, 0.66);
-  box-shadow: 0 0 0 2px rgba(196, 55, 45, 0.38), 0 14px 24px rgba(0, 0, 0, 0.35);
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .profileCardStage {
