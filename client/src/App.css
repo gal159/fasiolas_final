@@ -7858,3 +7858,32 @@ button:active {
     filter: drop-shadow(0 0 6px rgba(255, 224, 140, 1)) drop-shadow(0 0 20px rgba(255, 196, 64, 0.8));
   }
 }
+
+/* Atrakinami stalo fonai (Marketplace "Stalai" sekcija). */
+.roundTableArea.table-common_green {
+  background: #20100d url('./assets/tables/common_stalas_green.jpg') center / cover no-repeat;
+}
+
+.roundTableArea.table-common_blue {
+  background: #20100d url('./assets/tables/common_stalas_blue.jpg') center / cover no-repeat;
+}
+
+.roundTableArea.table-common_purple {
+  background: #20100d url('./assets/tables/common_stalas_purple.jpg') center / cover no-repeat;
+}
+
+.roundTableArea.table-common_red {
+  background: #20100d url('./assets/tables/common_stalas_red.jpg') center / cover no-repeat;
+}
+
+.roundTableArea.table-legendary_green {
+  background: #20100d url('./assets/tables/legendary_stalas_green.jpg') center / cover no-repeat;
+}
+
+.roundTableArea.table-legendary_purple {
+  background: #20100d url('./assets/tables/legendary_stalas_purple.jpg') center / cover no-repeat;
+}
+
+.roundTableArea.table-legendary_red {
+  background: #20100d url('./assets/tables/legendary_stalas_red.jpg') center / cover no-repeat;
+}

@@ -254,6 +254,7 @@ function createDefaultProfile(slot: PlayerProfile['profileSlot'] = PROFILE_SLOT_
     skinId: 'default',
     effectId: 'none',
     cardBackgroundId: 'classic',
+    tableId: 'common_green',
     profileSlot: slot,
   }
 }
@@ -303,6 +304,8 @@ function isPlayerProfile(value: unknown): value is PlayerProfile {
     (typeof record.cardBackgroundId === 'undefined' ||
       (typeof record.cardBackgroundId === 'string' &&
         CARD_BACKGROUND_OPTIONS.includes(record.cardBackgroundId as PlayerProfile['cardBackgroundId']))) &&
+    (typeof record.tableId === 'undefined' ||
+      (typeof record.tableId === 'string' && TABLE_OPTIONS.includes(record.tableId as PlayerProfile['tableId']))) &&
     typeof record.profileSlot === 'string' &&
     PROFILE_SLOT_OPTIONS.includes(record.profileSlot as PlayerProfile['profileSlot'])
   )
@@ -491,12 +494,19 @@ function normalizeLegacyProfile(profile: PlayerProfile): PlayerProfile {
       ? ((profile as PlayerProfile & { cardBackgroundId?: string }).cardBackgroundId as PlayerProfile['cardBackgroundId'])
       : 'classic'
 
+  const normalizedTable =
+    typeof (profile as PlayerProfile & { tableId?: string }).tableId === 'string' &&
+    TABLE_OPTIONS.includes((profile as PlayerProfile & { tableId?: string }).tableId as PlayerProfile['tableId'])
+      ? ((profile as PlayerProfile & { tableId?: string }).tableId as PlayerProfile['tableId'])
+      : 'common_green'
+
   const normalizedAvatar = avatarAliases[profile.avatarId] ?? profile.avatarId
   if (AVATAR_OPTIONS.includes(normalizedAvatar as PlayerProfile['avatarId'])) {
     return {
       ...profile,
       avatarId: normalizedAvatar as PlayerProfile['avatarId'],
       cardBackgroundId: normalizedBackground,
+      tableId: normalizedTable,
     }
   }
 
@@ -504,6 +514,7 @@ function normalizeLegacyProfile(profile: PlayerProfile): PlayerProfile {
     ...profile,
     avatarId: 'zeus',
     cardBackgroundId: normalizedBackground,
+    tableId: normalizedTable,
   }
 }
 
@@ -781,6 +792,7 @@ function App() {
   const shopByType = useMemo(() => {
     const grouped: Record<ShopItemType, ShopCatalogItem[]> = {
       background: [],
+      table: [],
       effect: [],
       skin: [],
       hat: [],
@@ -806,6 +818,9 @@ function App() {
     }
     if (type === 'background') {
       return account.unlocked.backgrounds.includes(id as PlayerProfile['cardBackgroundId'])
+    }
+    if (type === 'table') {
+      return (account.unlocked.tables ?? []).includes(id as PlayerProfile['tableId'])
     }
     return account.unlocked.effects.includes(id as PlayerProfile['effectId'])
   }
@@ -836,6 +851,9 @@ function App() {
     if (type === 'background') {
       return RARITY_PRICES[CARD_BACKGROUND_RARITY[id as PlayerProfile['cardBackgroundId']]]
     }
+    if (type === 'table') {
+      return RARITY_PRICES[TABLE_RARITY[id as PlayerProfile['tableId']]]
+    }
     return RARITY_PRICES[EFFECT_RARITY[id as PlayerProfile['effectId']]]
   }
 
@@ -851,6 +869,9 @@ function App() {
     }
     if (type === 'background') {
       return profileDraft.cardBackgroundId === id
+    }
+    if (type === 'table') {
+      return profileDraft.tableId === id
     }
     return profileDraft.effectId === id
   }
@@ -879,6 +900,9 @@ function App() {
       }
       if (itemType === 'background') {
         return { ...current, cardBackgroundId: itemId as PlayerProfile['cardBackgroundId'] }
+      }
+      if (itemType === 'table') {
+        return { ...current, tableId: itemId as PlayerProfile['tableId'] }
       }
       return { ...current, effectId: itemId as PlayerProfile['effectId'] }
     })
@@ -2478,7 +2502,7 @@ function App() {
             </div>
             {error ? <div className="tableInlineError">{error}</div> : null}
 
-            <div className="roundTableArea">
+            <div className={`roundTableArea table-${me?.profile.tableId ?? 'common_green'}`}>
               {payload.state.phase === 'DEALING' ? (
                 <div className="fasiolasDock">
                   <strong>Fasiolas</strong>
