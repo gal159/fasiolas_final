@@ -37,6 +37,7 @@ import { GameEngine } from "./gameEngine";
 
 const CLIENT_URL = process.env.CLIENT_URL ?? "http://localhost:5173";
 const APP_SECRET = process.env.APP_SECRET ?? "dev-secret-change-me";
+const REGISTRATION_STARTER_POINTS = 250;
 const ALLOWED_ORIGINS_RAW = process.env.ALLOWED_ORIGINS ?? CLIENT_URL;
 
 function normalizeOrigin(value: string): string {
@@ -322,6 +323,9 @@ app.post("/auth/register", async (req, res) => {
       return;
     }
 
+    const starterAccount = createDefaultAccount();
+    starterAccount.points = REGISTRATION_STARTER_POINTS;
+
     const nextUser: AuthUser = {
       id: randomBytes(16).toString("hex"),
       email,
@@ -330,7 +334,7 @@ app.post("/auth/register", async (req, res) => {
       hasCompletedProfileSetup: false,
       activeProfileSlot: PROFILE_SLOT_OPTIONS[0],
       profileSlots: createDefaultProfileSlots(),
-      account: createDefaultAccount(),
+      account: starterAccount,
       resetTokenHash: null,
       resetTokenExpiresAt: null,
       createdAt: now,
@@ -520,6 +524,34 @@ const io = new Server(httpServer, {
 });
 
 const engine = new GameEngine();
+
+// Po kiekvieno match'o rezultatai (taskai, W/L, zaidimu skaicius) irasomi
+// i auth DB, kad isliktu tarp sesiju ir matytusi Marketplace/profilyje.
+engine.setMatchRewardsListener((rewards) => {
+  for (const entry of rewards) {
+    if (!entry.authUserId) {
+      continue;
+    }
+    void (async () => {
+      const storedUser = await authUsersDb.findOne({ id: entry.authUserId });
+      if (!storedUser) {
+        return;
+      }
+      const user = await hydrateAuthUser(storedUser);
+      const account = normalizeAccount(user.account);
+      account.points += entry.reward;
+      account.gamesPlayed += 1;
+      if (entry.won) {
+        account.gamesWon += 1;
+      } else {
+        account.gamesLost += 1;
+      }
+      await authUsersDb.update({ id: user.id }, { $set: { account, updatedAt: Date.now() } });
+    })().catch((error) => {
+      console.error("Nepavyko irasyti match rewards:", error);
+    });
+  }
+});
 
 const createRoomSchema = z.object({
   name: z.string().trim().min(1).max(24),

@@ -789,6 +789,19 @@ function App() {
     refreshShopCatalog()
   }, [showMarketplaceWindow])
 
+  // Zaidimui pasibaigus atnaujinam paskyra is auth DB (taskai, W/L, lygis).
+  // Nedidelis uzdelsimas, kad serveris spetu irasyti match rewards.
+  const gamePhase = payload?.state.phase
+  useEffect(() => {
+    if (gamePhase !== 'FINISHED') {
+      return
+    }
+    const timer = window.setTimeout(() => {
+      void refreshAccountFromAuth()
+    }, 800)
+    return () => window.clearTimeout(timer)
+  }, [gamePhase])
+
   const shopByType = useMemo(() => {
     const grouped: Record<ShopItemType, ShopCatalogItem[]> = {
       background: [],
@@ -2471,7 +2484,7 @@ function App() {
               </div>
 
               <div className="customizationPanel">
-                {renderMarketplacePanel('Marketplace', 'Kiekvienas match: +200 tasku visiems, Top3 bonusai: +200 / +100 / +50.')}
+                {renderMarketplacePanel('Marketplace', 'Registracija: +250 pts. Kiekvienas match: +200 tasku visiems, Top3 bonusai: +200 / +100 / +50.')}
 
                 <div className="colorPickerRow">
                   <span>Pagrindine spalva</span>

@@ -271,9 +271,22 @@ function canPlayOnTable(topTable: Card | null, candidate: Card, trumpSuit: Suit 
   return isHigherSameSuit(topTable, candidate) || (trumpSuit !== null && candidate.suit === trumpSuit);
 }
 
+export type MatchRewardRecord = {
+  playerId: string;
+  authUserId: string | null;
+  placement: number;
+  reward: number;
+  won: boolean;
+};
+
 export class GameEngine {
   private readonly rooms = new Map<string, GameRoom>();
   private readonly playerAccounts = new Map<string, PlayerAccountState>();
+  private matchRewardsListener: ((rewards: MatchRewardRecord[]) => void) | null = null;
+
+  public setMatchRewardsListener(listener: (rewards: MatchRewardRecord[]) => void): void {
+    this.matchRewardsListener = listener;
+  }
 
   private recordLastAction(
     room: GameRoom,
@@ -1042,23 +1055,37 @@ export class GameEngine {
       return;
     }
 
-    const standings = room.players
-      .map((player) => player.id)
-      .filter((playerId) => playerId !== room.loserPlayerId);
-    standings.push(room.loserPlayerId);
+    // Vietos pagal realia baigimo tvarka, ne pagal sedejimo eile.
+    const ranked = room.finalRankingPlayerIds.filter((id) => room.players.some((p) => p.id === id));
+    const missing = room.players.map((p) => p.id).filter((id) => !ranked.includes(id));
+    const standings = [...ranked, ...missing];
+
+    const rewardRecords: MatchRewardRecord[] = [];
 
     standings.forEach((playerId, index) => {
       const account = this.getAccountOrThrow(playerId);
       const placement = index + 1;
       const reward = BASE_POINTS_PER_GAME + (PLACEMENT_BONUS[placement] ?? 0);
+      const won = placement === 1;
       account.gamesPlayed += 1;
       account.points += reward;
-      if (placement === 1) {
+      if (won) {
         account.gamesWon = (account.gamesWon ?? 0) + 1;
       } else {
         account.gamesLost = (account.gamesLost ?? 0) + 1;
       }
+
+      const player = room.players.find((p) => p.id === playerId);
+      rewardRecords.push({
+        playerId,
+        authUserId: player?.authUserId ?? null,
+        placement,
+        reward,
+        won,
+      });
     });
+
+    this.matchRewardsListener?.(rewardRecords);
   }
 
   private ensureAccount(playerId: string, profile: PlayerProfile, options?: { registeredAt?: number }): void {
