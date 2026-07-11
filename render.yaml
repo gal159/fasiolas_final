@@ -12,6 +12,10 @@ services:
     envVars:
       - key: APP_SECRET
         sync: false
+      # PostgreSQL connection string (pvz., is Neon arba Render Postgres).
+      # Jei nenustatytas, serveris naudoja NeDB faila DATA_DIR kataloge.
+      - key: DATABASE_URL
+        sync: false
       - key: CLIENT_URL
         value: https://lediniaisprendimai.com
       - key: ALLOWED_ORIGINS

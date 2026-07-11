@@ -3,9 +3,8 @@ import cors from "cors";
 import express from "express";
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
-import { resolve } from "node:path";
-import Datastore from "nedb-promises";
 import { Server } from "socket.io";
+import { createAuthUserStore, type AuthUser } from "./authUserStore";
 import { z } from "zod";
 import {
   AVATAR_PRICE_OVERRIDES,
@@ -59,25 +58,6 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-const AUTH_DB_PATH = process.env.DATA_DIR
-  ? resolve(process.env.DATA_DIR, "auth-users.db")
-  : resolve(process.cwd(), "data", "auth-users.db");
-
-type AuthUser = {
-  id: string;
-  email: string;
-  playerName: string;
-  passwordHash: string;
-  hasCompletedProfileSetup: boolean;
-  activeProfileSlot: PlayerProfile["profileSlot"];
-  profileSlots: ProfileSlotMap;
-  account: PlayerAccountState;
-  resetTokenHash: string | null;
-  resetTokenExpiresAt: number | null;
-  createdAt: number;
-  updatedAt: number;
-};
-
 const AUTH_USER_ID_REGEX = /^[a-f0-9]{32}$/i;
 
 const registerSchema = z.object({
@@ -128,12 +108,7 @@ const resetPasswordSchema = z.object({
   password: z.string().min(8).max(128),
 });
 
-const authUsersDb = Datastore.create({
-  filename: AUTH_DB_PATH,
-  autoload: true,
-}) as Datastore<AuthUser>;
-
-void authUsersDb.ensureIndex({ fieldName: "email", unique: true });
+const authStore = createAuthUserStore();
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -270,18 +245,13 @@ async function hydrateAuthUser(user: AuthUser): Promise<AuthUser> {
     updatedAt: Date.now(),
   };
 
-  await authUsersDb.update(
-    { id: user.id },
-    {
-      $set: {
+  await authStore.patch(user.id, {
         profileSlots: hydratedUser.profileSlots,
         activeProfileSlot: hydratedUser.activeProfileSlot,
         account: hydratedUser.account,
         hasCompletedProfileSetup: hydratedUser.hasCompletedProfileSetup,
         updatedAt: hydratedUser.updatedAt,
-      },
-    },
-  );
+      });
 
   return hydratedUser;
 }
@@ -317,7 +287,7 @@ app.post("/auth/register", async (req, res) => {
     const playerName = parsed.playerName.trim();
     const now = Date.now();
 
-    const existingUser = await authUsersDb.findOne({ email });
+    const existingUser = await authStore.findByEmail(email);
     if (existingUser) {
       res.status(409).json({ ok: false, error: "Sis el. pastas jau uzregistruotas" });
       return;
@@ -341,7 +311,7 @@ app.post("/auth/register", async (req, res) => {
       updatedAt: now,
     };
 
-    await authUsersDb.insert(nextUser);
+    await authStore.insert(nextUser);
 
     res.json({
       ok: true,
@@ -359,7 +329,7 @@ app.post("/auth/login", async (req, res) => {
   try {
     const parsed = loginSchema.parse(req.body);
     const email = normalizeEmail(parsed.email);
-    const storedUser = await authUsersDb.findOne({ email });
+    const storedUser = await authStore.findByEmail(email);
 
     if (!storedUser || !verifyPassword(parsed.password, storedUser.passwordHash)) {
       res.status(401).json({ ok: false, error: "Neteisingas el. pastas arba slaptazodis" });
@@ -383,7 +353,7 @@ app.post("/auth/bootstrap", async (req, res) => {
   try {
     const parsed = bootstrapSchema.parse(req.body);
     const email = normalizeEmail(parsed.email);
-    const storedUser = await authUsersDb.findOne({ email });
+    const storedUser = await authStore.findByEmail(email);
 
     if (!storedUser) {
       res.status(404).json({ ok: false, error: "Vartotojas nerastas" });
@@ -402,7 +372,7 @@ app.post("/auth/profile", async (req, res) => {
   try {
     const parsed = saveProfileSchema.parse(req.body);
     const email = normalizeEmail(parsed.email);
-    const storedUser = await authUsersDb.findOne({ email });
+    const storedUser = await authStore.findByEmail(email);
 
     if (!storedUser) {
       res.status(404).json({ ok: false, error: "Vartotojas nerastas" });
@@ -419,17 +389,12 @@ app.post("/auth/profile", async (req, res) => {
     const hasCompletedProfileSetup = parsed.completeSetup ? true : user.hasCompletedProfileSetup;
     const updatedAt = Date.now();
 
-    await authUsersDb.update(
-      { id: user.id },
-      {
-        $set: {
+    await authStore.patch(user.id, {
           profileSlots: nextProfileSlots,
           activeProfileSlot,
           hasCompletedProfileSetup,
           updatedAt,
-        },
-      },
-    );
+        });
 
     res.json({
       ok: true,
@@ -450,23 +415,18 @@ app.post("/auth/forgot-password", async (req, res) => {
   try {
     const parsed = forgotPasswordSchema.parse(req.body);
     const email = normalizeEmail(parsed.email);
-    const user = await authUsersDb.findOne({ email });
+    const user = await authStore.findByEmail(email);
 
     let previewResetLink: string | undefined;
 
     if (user) {
       const tokenRaw = randomBytes(32).toString("hex");
       const tokenHash = hashToken(tokenRaw);
-      await authUsersDb.update(
-        { id: user.id },
-        {
-          $set: {
+      await authStore.patch(user.id, {
             resetTokenHash: tokenHash,
             resetTokenExpiresAt: Date.now() + 1000 * 60 * 30,
             updatedAt: Date.now(),
-          },
-        },
-      );
+          });
 
       const resetLink = `${CLIENT_URL}?resetToken=${tokenRaw}`;
       previewResetLink = resetLink;
@@ -488,27 +448,19 @@ app.post("/auth/reset-password", async (req, res) => {
     const tokenHash = hashToken(parsed.token);
     const now = Date.now();
 
-    const user = await authUsersDb.findOne({
-      resetTokenHash: tokenHash,
-      resetTokenExpiresAt: { $gte: now },
-    });
+    const user = await authStore.findByResetToken(tokenHash, now);
 
     if (!user) {
       res.status(400).json({ ok: false, error: "Neteisingas arba nebegaliojantis slaptazodzio atstatymo tokenas" });
       return;
     }
 
-    await authUsersDb.update(
-      { id: user.id },
-      {
-        $set: {
+    await authStore.patch(user.id, {
           passwordHash: hashPassword(parsed.password),
           resetTokenHash: null,
           resetTokenExpiresAt: null,
           updatedAt: now,
-        },
-      },
-    );
+        });
 
     res.json({ ok: true, message: "Slaptazodis sekmingai atnaujintas" });
   } catch (error) {
@@ -529,11 +481,12 @@ const engine = new GameEngine();
 // i auth DB, kad isliktu tarp sesiju ir matytusi Marketplace/profilyje.
 engine.setMatchRewardsListener((rewards) => {
   for (const entry of rewards) {
-    if (!entry.authUserId) {
+    const authUserId = entry.authUserId;
+    if (!authUserId) {
       continue;
     }
     void (async () => {
-      const storedUser = await authUsersDb.findOne({ id: entry.authUserId });
+      const storedUser = await authStore.findById(authUserId);
       if (!storedUser) {
         return;
       }
@@ -546,7 +499,7 @@ engine.setMatchRewardsListener((rewards) => {
       } else {
         account.gamesLost += 1;
       }
-      await authUsersDb.update({ id: user.id }, { $set: { account, updatedAt: Date.now() } });
+      await authStore.patch(user.id, { account, updatedAt: Date.now() });
     })().catch((error) => {
       console.error("Nepavyko irasyti match rewards:", error);
     });
@@ -667,7 +620,7 @@ app.post("/auth/purchase", async (req, res) => {
     const email = normalizeEmail(parsed.email);
     const itemType = parsed.itemType as ShopItemType;
     const itemId = parsed.itemId as ShopItemId;
-    const storedUser = await authUsersDb.findOne({ email });
+    const storedUser = await authStore.findByEmail(email);
 
     if (!storedUser) {
       res.status(404).json({ ok: false, error: "Vartotojas nerastas" });
@@ -696,15 +649,10 @@ app.post("/auth/purchase", async (req, res) => {
     unlockItem(account, itemType, itemId);
     const updatedAt = Date.now();
 
-    await authUsersDb.update(
-      { id: user.id },
-      {
-        $set: {
+    await authStore.patch(user.id, {
           account,
           updatedAt,
-        },
-      },
-    );
+        });
 
     res.json({ ok: true, account });
   } catch (error) {
@@ -733,7 +681,7 @@ app.post("/admin/grant-points", async (req, res) => {
   try {
     const parsed = adminGrantPointsSchema.parse(req.body);
     const email = normalizeEmail(parsed.email);
-    const storedUser = await authUsersDb.findOne({ email });
+    const storedUser = await authStore.findByEmail(email);
 
     if (!storedUser) {
       res.status(404).json({ ok: false, error: "Vartotojas nerastas" });
@@ -744,15 +692,10 @@ app.post("/admin/grant-points", async (req, res) => {
     const account = normalizeAccount(user.account);
     account.points = Math.max(0, account.points + parsed.points);
 
-    await authUsersDb.update(
-      { id: user.id },
-      {
-        $set: {
+    await authStore.patch(user.id, {
           account,
           updatedAt: Date.now(),
-        },
-      },
-    );
+        });
 
     res.json({ ok: true, email, points: account.points });
   } catch (error) {
@@ -781,7 +724,7 @@ io.on("connection", (socket) => {
   socket.on("create_room", (payload: unknown, ack) => {
     try {
       const parsed = createRoomSchema.parse(payload);
-      const authUser = parsed.authUserId ? authUsersDb.findOne({ id: parsed.authUserId }) : null;
+      const authUser = parsed.authUserId ? authStore.findById(parsed.authUserId) : null;
       Promise.resolve(authUser)
         .then((resolvedAuthUser) => {
           const effectiveName = resolvedAuthUser?.playerName?.trim() || parsed.name;
@@ -808,7 +751,7 @@ io.on("connection", (socket) => {
       const parsed = joinRoomSchema.parse(payload);
       const roomCode = parsed.roomCode.trim().toUpperCase();
       const existingPlayerId = parsed.existingPlayerId;
-      const authUser = parsed.authUserId ? authUsersDb.findOne({ id: parsed.authUserId }) : null;
+      const authUser = parsed.authUserId ? authStore.findById(parsed.authUserId) : null;
       Promise.resolve(authUser)
         .then((resolvedAuthUser) => {
           let playerId = existingPlayerId;
@@ -948,7 +891,7 @@ io.on("connection", (socket) => {
       // Prefer exact auth user linkage when available.
       try {
         const authUserId = engine.getPlayerAuthUserId(roomCode, targetPlayerId);
-        const authUser = authUserId ? await authUsersDb.findOne({ id: authUserId }) : null;
+        const authUser = authUserId ? await authStore.findById(authUserId) : null;
         if (authUser?.createdAt) {
           responseInfo = { ...info, registeredAt: authUser.createdAt };
         }
@@ -964,7 +907,15 @@ io.on("connection", (socket) => {
 });
 
 const port = Number(process.env.PORT || 3001);
-httpServer.listen(port, () => {
-  // eslint-disable-next-line no-console
-  console.log(`Server listening on ${port}`);
-});
+authStore
+  .init()
+  .then(() => {
+    httpServer.listen(port, () => {
+      // eslint-disable-next-line no-console
+      console.log(`Server listening on ${port}`);
+    });
+  })
+  .catch((error) => {
+    console.error("Nepavyko inicializuoti auth store:", error);
+    process.exit(1);
+  });
