@@ -3473,6 +3473,18 @@ body:has(.tableWindowOverlay) {
   z-index: auto;
 }
 
+/* Oponentu "Kortos: x" rodomas virs profilio korteles, ne po kysancia korta.
+   Seat centruotas, tad papildoma eilute augina virsu - kompensuojam zemyn,
+   kad uzrasas nebutu nukirptas stalo zonos virsuje. */
+.tableSeat:not(.me) {
+  transform: translate(-50%, calc(-50% + 36px));
+}
+
+.tableSeat:not(.me) > span {
+  order: -1;
+  margin-bottom: 4px;
+}
+
 .tableSeat.me {
   border: 0;
   background: transparent;
