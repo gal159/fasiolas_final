@@ -2394,19 +2394,6 @@ function App() {
 
           <div className="profileOnboardingAvatarName">{AVATAR_LABELS[profileDraft.avatarId]}</div>
 
-          <div className="profileOnboardingDots">
-            {commonAvatars.map((avatar, index) => (
-              <button
-                key={avatar}
-                type="button"
-                className={index === currentAvatarIndex ? 'onboardingDot active' : 'onboardingDot'}
-                aria-label={AVATAR_LABELS[avatar]}
-                aria-pressed={index === currentAvatarIndex}
-                onClick={() => updateProfileDraft((current) => ({ ...current, avatarId: avatar }))}
-              />
-            ))}
-          </div>
-
           <button type="button" className="profileOnboardingConfirm" onClick={() => { void completeProfileSetup() }}>
             Testi i zaidimo centra
           </button>
