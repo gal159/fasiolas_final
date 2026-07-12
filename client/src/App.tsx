@@ -564,6 +564,7 @@ function App() {
   const [name, setName] = useState('')
   const [roomCodeInput, setRoomCodeInput] = useState('')
   const [roomCode, setRoomCode] = useState('')
+  const [inviteCopied, setInviteCopied] = useState(false)
   const [error, setError] = useState('')
   const [payload, setPayload] = useState<ClientStatePayload | null>(null)
   const [account, setAccount] = useState<PlayerAccountState>(createEmptyAccount())
@@ -677,6 +678,15 @@ function App() {
       setAuthMode('reset')
       setLoginInfo('Ivesk nauja slaptazodi')
       setLoginError('')
+    }
+
+    // Kvietimo nuoroda: ?room=KODAS uzpildo kambario lauka ir isvalo URL.
+    const invitedRoom = params.get('room')?.trim().toUpperCase()
+    if (invitedRoom) {
+      setRoomCodeInput(invitedRoom)
+      params.delete('room')
+      const nextSearch = params.toString()
+      window.history.replaceState(null, '', `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}`)
     }
   }, [])
 
@@ -1488,6 +1498,20 @@ function App() {
     }
 
     setDraggedCardIndex(null)
+  }
+
+  async function copyInviteLink(): Promise<void> {
+    if (!roomCode) {
+      return
+    }
+    const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${roomCode}`
+    try {
+      await navigator.clipboard.writeText(inviteUrl)
+      setInviteCopied(true)
+      window.setTimeout(() => setInviteCopied(false), 2000)
+    } catch {
+      setError('Nepavyko nukopijuoti nuorodos')
+    }
   }
 
   function handleSeatClick(targetPlayerId: string): void {
@@ -2445,6 +2469,9 @@ function App() {
           <button onClick={joinRoom}>Prisijungti</button>
           <button disabled={!roomCode} onClick={startGame}>
             Pradeti zaidima
+          </button>
+          <button type="button" disabled={!roomCode} onClick={() => { void copyInviteLink() }}>
+            {inviteCopied ? 'Nukopijuota!' : 'Kopijuoti kvietima'}
           </button>
           <button type="button" onClick={() => setShowMarketplaceWindow(true)}>
             Marketplace
