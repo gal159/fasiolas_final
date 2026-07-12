@@ -7899,3 +7899,37 @@ button:active {
 .roundTableArea.table-legendary_red {
   background: #20100d url('./assets/tables/legendary_stalas_red.jpg') center / cover no-repeat;
 }
+
+/* Stalu korteles Marketplace rodo tikra stalo fona su tamsiu sluoksniu tekstui. */
+[class*='tablePreview-'] .shopItemTop strong,
+[class*='tablePreview-'] .shopItemMeta {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+
+.shopItemCard.tablePreview-common_green {
+  background: linear-gradient(180deg, rgba(8, 16, 30, 0.5), rgba(8, 16, 30, 0.72)), url('./assets/tables/common_stalas_green.jpg') center / cover no-repeat;
+}
+
+.shopItemCard.tablePreview-common_blue {
+  background: linear-gradient(180deg, rgba(8, 16, 30, 0.5), rgba(8, 16, 30, 0.72)), url('./assets/tables/common_stalas_blue.jpg') center / cover no-repeat;
+}
+
+.shopItemCard.tablePreview-common_purple {
+  background: linear-gradient(180deg, rgba(8, 16, 30, 0.5), rgba(8, 16, 30, 0.72)), url('./assets/tables/common_stalas_purple.jpg') center / cover no-repeat;
+}
+
+.shopItemCard.tablePreview-common_red {
+  background: linear-gradient(180deg, rgba(8, 16, 30, 0.5), rgba(8, 16, 30, 0.72)), url('./assets/tables/common_stalas_red.jpg') center / cover no-repeat;
+}
+
+.shopItemCard.tablePreview-legendary_green {
+  background: linear-gradient(180deg, rgba(8, 16, 30, 0.5), rgba(8, 16, 30, 0.72)), url('./assets/tables/legendary_stalas_green.jpg') center / cover no-repeat;
+}
+
+.shopItemCard.tablePreview-legendary_purple {
+  background: linear-gradient(180deg, rgba(8, 16, 30, 0.5), rgba(8, 16, 30, 0.72)), url('./assets/tables/legendary_stalas_purple.jpg') center / cover no-repeat;
+}
+
+.shopItemCard.tablePreview-legendary_red {
+  background: linear-gradient(180deg, rgba(8, 16, 30, 0.5), rgba(8, 16, 30, 0.72)), url('./assets/tables/legendary_stalas_red.jpg') center / cover no-repeat;
+}
