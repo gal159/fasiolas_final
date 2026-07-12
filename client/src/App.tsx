@@ -2382,7 +2382,6 @@ function App() {
         <section className="profileOnboarding">
           <header className="profileOnboardingHeader">
             <h1>Pasirink savo veikeja</h1>
-            <p>Rodyklemis issirink savo heroju. Kitas korteles dalis atrakinsi ir keisi marketplace.</p>
           </header>
 
           <div className="profileOnboardingStage">
