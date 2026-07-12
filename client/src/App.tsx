@@ -133,7 +133,7 @@ const RARITY_GAMES_REQUIRED: Record<RarityId, number> = {
   mythic: 260,
 }
 
-const SHOP_SECTION_ORDER: ShopItemType[] = ['background', 'table', 'effect', 'skin', 'hat', 'avatar']
+const SHOP_SECTION_ORDER: ShopItemType[] = ['background', 'table', 'effect', 'avatar']
 
 const SHOP_SECTION_LABELS: Record<ShopItemType, string> = {
   background: 'Card backgrounds',
@@ -953,7 +953,9 @@ function App() {
                       ? ` bgPreview-${String(item.id)}`
                       : item.type === 'effect' && String(item.id) !== 'none'
                         ? ` fxPreview-${String(item.id)}`
-                        : ''
+                        : item.type === 'avatar'
+                          ? ` avatarPreview-${String(item.id)}`
+                          : ''
 
                 return (
                   <article key={itemKey} className={`shopItemCard rarity-${item.rarity} ${owned ? 'owned' : 'locked'}${previewClass}`}>
