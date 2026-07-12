@@ -1214,6 +1214,19 @@ function App() {
     event?.preventDefault()
     event?.stopPropagation()
 
+    // Kai laukia atversta korta ir mano ejimas - paspaudimas ant profilio
+    // korteles deda korta tam zaidejui, o ne apvercia kortele.
+    if (
+      payload &&
+      isMyTurn &&
+      payload.state.phase === 'DEALING' &&
+      payload.state.revealedDrawCard &&
+      payload.state.players.some((p) => p.id === playerId)
+    ) {
+      handlePlaceRevealedWithSlide(playerId)
+      return
+    }
+
     if (flippedBadgeId === playerId) {
       setFlippedBadgeId(null)
       return
@@ -1227,7 +1240,8 @@ function App() {
       return
     }
     requestPlayerCardInfo(playerId, true)
-  }, [flippedBadgeId, playerCardInfoCache, requestPlayerCardInfo])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flippedBadgeId, playerCardInfoCache, requestPlayerCardInfo, payload, isMyTurn])
 
   useEffect(() => {
     if (!payload || !socket) {
