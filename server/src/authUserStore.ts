@@ -23,6 +23,7 @@ export interface AuthUserStore {
   findByEmail(email: string): Promise<AuthUser | null>;
   findById(id: string): Promise<AuthUser | null>;
   findByResetToken(tokenHash: string, notExpiredBefore: number): Promise<AuthUser | null>;
+  findAllByPlayerName(playerName: string): Promise<AuthUser[]>;
   insert(user: AuthUser): Promise<void>;
   patch(id: string, fields: Partial<AuthUser>): Promise<void>;
 }
@@ -57,6 +58,11 @@ export class NedbAuthUserStore implements AuthUserStore {
         resetTokenExpiresAt: { $gte: notExpiredBefore },
       })) ?? null
     );
+  }
+
+  async findAllByPlayerName(playerName: string): Promise<AuthUser[]> {
+    const escaped = playerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return this.db.find({ playerName: new RegExp(`^${escaped}$`, "i") });
   }
 
   async insert(user: AuthUser): Promise<void> {
@@ -131,6 +137,14 @@ export class PostgresAuthUserStore implements AuthUserStore {
       [tokenHash, notExpiredBefore],
     );
     return this.rowToUser(result.rows[0]);
+  }
+
+  async findAllByPlayerName(playerName: string): Promise<AuthUser[]> {
+    const result = await this.pool.query<{ doc: AuthUser }>(
+      "SELECT doc FROM auth_users WHERE LOWER(doc->>'playerName') = LOWER($1)",
+      [playerName],
+    );
+    return result.rows.map((row) => row.doc);
   }
 
   async insert(user: AuthUser): Promise<void> {

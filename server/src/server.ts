@@ -66,8 +66,9 @@ const registerSchema = z.object({
   password: z.string().min(8).max(128),
 });
 
+// "email" lauke priimamas el. pastas ARBA zaidimo vardas.
 const loginSchema = z.object({
-  email: z.string().trim().email().max(120),
+  email: z.string().trim().min(2).max(120),
   password: z.string().min(1).max(128),
 });
 
@@ -328,11 +329,22 @@ app.post("/auth/register", async (req, res) => {
 app.post("/auth/login", async (req, res) => {
   try {
     const parsed = loginSchema.parse(req.body);
-    const email = normalizeEmail(parsed.email);
-    const storedUser = await authStore.findByEmail(email);
+    const identifier = parsed.email.trim();
 
-    if (!storedUser || !verifyPassword(parsed.password, storedUser.passwordHash)) {
-      res.status(401).json({ ok: false, error: "Neteisingas el. pastas arba slaptazodis" });
+    // Su @ - el. pastas, be @ - zaidimo vardas. Vardai nera unikalus,
+    // tad tikrinam slaptazodi pries kiekviena kandidata.
+    let candidates: AuthUser[];
+    if (identifier.includes("@")) {
+      const byEmail = await authStore.findByEmail(normalizeEmail(identifier));
+      candidates = byEmail ? [byEmail] : [];
+    } else {
+      candidates = await authStore.findAllByPlayerName(identifier);
+    }
+
+    const storedUser = candidates.find((candidate) => verifyPassword(parsed.password, candidate.passwordHash));
+
+    if (!storedUser) {
+      res.status(401).json({ ok: false, error: "Neteisingas el. pastas / vardas arba slaptazodis" });
       return;
     }
 

@@ -2024,7 +2024,7 @@ function App() {
     setLoginInfo('')
 
     if (!email || !password) {
-      setLoginError('Ivesk el. pasta ir slaptazodi')
+      setLoginError('Ivesk el. pasta arba varda ir slaptazodi')
       return
     }
 
@@ -2241,14 +2241,14 @@ function App() {
       <div className="page authPage">
         <section className="panel loginPanel">
           <h1>Prisijungimas</h1>
-          <p className="loginHint">El. pastas naudojamas prisijungimui ir slaptazodzio atstatymui</p>
+          <p className="loginHint">Prisijungti gali el. pastu arba zaidimo vardu. El. pastas reikalingas slaptazodzio atstatymui.</p>
           <div className="row">
-            <label htmlFor="login-name">El. pastas</label>
+            <label htmlFor="login-name">{authMode === 'login' ? 'El. pastas arba vardas' : 'El. pastas'}</label>
             <input
               id="login-name"
               value={loginUsername}
               onChange={(event) => setLoginUsername(event.target.value)}
-              placeholder="Ivesk el. pasta"
+              placeholder={authMode === 'login' ? 'Ivesk el. pasta arba zaidimo varda' : 'Ivesk el. pasta'}
             />
           </div>
           {authMode !== 'forgot' ? (

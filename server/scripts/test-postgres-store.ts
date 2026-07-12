@@ -102,6 +102,11 @@ async function main(): Promise<void> {
   await store.upsert(second);
   assert((await store.findById(second.id))?.email === "antras@example.com", "upsert sukuria nauja irasa");
 
+  // paieska pagal zaidimo varda (case-insensitive)
+  const byName = await store.findAllByPlayerName("PERRASYTAS");
+  assert(byName.length === 1 && byName[0].id === user.id, "findAllByPlayerName randa nepaisant raidziu dydzio");
+  assert((await store.findAllByPlayerName("nesamas")).length === 0, "findAllByPlayerName grazina tuscia nerastam");
+
   // unikalus email
   let duplicateBlocked = false;
   try {
