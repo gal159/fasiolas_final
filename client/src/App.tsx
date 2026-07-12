@@ -946,10 +946,15 @@ function App() {
                 const isPending = pendingShopKey === itemKey
                 const label = SHOP_ITEM_LABELS[item.type][String(item.id)] ?? String(item.id)
 
-                const tablePreviewClass = item.type === 'table' ? ` tablePreview-${String(item.id)}` : ''
+                const previewClass =
+                  item.type === 'table'
+                    ? ` tablePreview-${String(item.id)}`
+                    : item.type === 'background'
+                      ? ` bgPreview-${String(item.id)}`
+                      : ''
 
                 return (
-                  <article key={itemKey} className={`shopItemCard rarity-${item.rarity} ${owned ? 'owned' : 'locked'}${tablePreviewClass}`}>
+                  <article key={itemKey} className={`shopItemCard rarity-${item.rarity} ${owned ? 'owned' : 'locked'}${previewClass}`}>
                     <div className="shopItemTop">
                       <strong>{label}</strong>
                       <span className="shopRarityChip">{RARITY_LABELS[item.rarity]}</span>
