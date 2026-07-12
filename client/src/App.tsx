@@ -951,7 +951,9 @@ function App() {
                     ? ` tablePreview-${String(item.id)}`
                     : item.type === 'background'
                       ? ` bgPreview-${String(item.id)}`
-                      : ''
+                      : item.type === 'effect' && String(item.id) !== 'none'
+                        ? ` fxPreview-${String(item.id)}`
+                        : ''
 
                 return (
                   <article key={itemKey} className={`shopItemCard rarity-${item.rarity} ${owned ? 'owned' : 'locked'}${previewClass}`}>
