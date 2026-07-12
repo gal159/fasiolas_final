@@ -3013,8 +3013,30 @@ function App() {
 
       {me && payload?.state.phase === 'FINISHED' ? (
         <section className="resultsOverlay" role="dialog" aria-modal="true" aria-label="Zaidimo rezultatai">
+          {payload.state.matchRewards?.find((entry) => entry.playerId === me.id)?.won ? (
+            <div className="confettiLayer" aria-hidden="true">
+              {Array.from({ length: 28 }).map((_, i) => (
+                <span
+                  key={`confetti-${i}`}
+                  className="confettiPiece"
+                  style={{
+                    left: `${(i * 37) % 100}%`,
+                    animationDelay: `${(i % 7) * 0.35}s`,
+                    animationDuration: `${2.6 + (i % 5) * 0.45}s`,
+                    backgroundColor: ['#ffd54f', '#ff5e5e', '#53dc5b', '#338bff', '#c084fc'][i % 5],
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
           <article className="resultsDialog">
-            <h2>{payload.state.loserPlayerId === me.id ? 'Pralaimejai partija' : 'Partija baigta'}</h2>
+            <h2>
+              {payload.state.matchRewards?.find((entry) => entry.playerId === me.id)?.won
+                ? 'Laimejai partija!'
+                : payload.state.loserPlayerId === me.id
+                  ? 'Pralaimejai partija'
+                  : 'Partija baigta'}
+            </h2>
             <p className="resultsSubtitle">Galutiniai zaidimo rezultatai</p>
 
             <div className="resultsTableWrap">
@@ -3024,18 +3046,25 @@ function App() {
                     <th>Vieta</th>
                     <th>Zaidejas</th>
                     <th>Statusas</th>
-                    <th>Kortos</th>
+                    <th>Taskai</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {finalStandings.map((player, index) => (
-                    <tr key={`result-${player.id}`} className={index === 0 ? 'winnerRow' : ''}>
-                      <td>#{index + 1}</td>
-                      <td>{player.name}</td>
-                      <td>{payload.state.loserPlayerId === player.id ? 'Pralaimejo' : 'Laimetojas'}</td>
-                      <td>{player.cardCount}</td>
-                    </tr>
-                  ))}
+                  {finalStandings.map((player, index) => {
+                    const rewardEntry = payload.state.matchRewards?.find((entry) => entry.playerId === player.id)
+                    const rowClasses = [
+                      index === 0 ? 'winnerRow' : '',
+                      player.id === me.id ? 'selfRow' : '',
+                    ].filter(Boolean).join(' ')
+                    return (
+                      <tr key={`result-${player.id}`} className={rowClasses}>
+                        <td>#{rewardEntry?.placement ?? index + 1}</td>
+                        <td>{player.name}</td>
+                        <td>{payload.state.loserPlayerId === player.id ? 'Pralaimejo' : 'Laimetojas'}</td>
+                        <td className="rewardCell">{rewardEntry ? `+${rewardEntry.reward}` : '-'}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

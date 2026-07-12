@@ -193,6 +193,13 @@ export interface PublicPlayerState {
   profile: PlayerProfile;
 }
 
+export interface MatchRewardEntry {
+  playerId: string;
+  placement: number;
+  reward: number;
+  won: boolean;
+}
+
 export interface PublicTableState {
   phase: GamePhase;
   roomCode: string;
@@ -207,6 +214,7 @@ export interface PublicTableState {
   loserPlayerId: string | null;
   finalRankingPlayerIds: string[];
   pendingFasiolas: PendingFasiolasState | null;
+  matchRewards: MatchRewardEntry[] | null;
 }
 
 export interface PendingFasiolasState {

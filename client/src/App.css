@@ -8139,3 +8139,41 @@ header.profileOnboardingHeader {
 .leaderboardTable tbody tr:nth-child(1) td:first-child { color: #c99400; font-weight: 800; }
 .leaderboardTable tbody tr:nth-child(2) td:first-child { color: #8b8b8b; font-weight: 800; }
 .leaderboardTable tbody tr:nth-child(3) td:first-child { color: #a5602c; font-weight: 800; }
+
+/* Pabaigos ekranas: konfeti laimetojui ir apdovanojimu paryskinimai. */
+.confettiLayer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.confettiPiece {
+  position: absolute;
+  top: -14px;
+  width: 10px;
+  height: 14px;
+  border-radius: 2px;
+  opacity: 0.92;
+  animation: confettiFall linear infinite;
+}
+
+@keyframes confettiFall {
+  0% {
+    transform: translateY(-16px) rotate(0deg);
+  }
+  100% {
+    transform: translateY(105vh) rotate(680deg);
+  }
+}
+
+.resultsTable tr.selfRow td {
+  font-weight: 700;
+  background: rgba(255, 205, 96, 0.16);
+}
+
+.resultsTable .rewardCell {
+  font-weight: 700;
+  color: #1e7d3c;
+}

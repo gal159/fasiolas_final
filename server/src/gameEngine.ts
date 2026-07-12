@@ -82,6 +82,7 @@ type GameRoom = {
   pendingFasiolas: PendingFasiolasState | null;
   pendingFasiolasCards: Map<string, Card>;
   lastAction: LastActionRecord | null;
+  matchRewards: MatchRewardRecord[] | null;
 };
 
 const SUITS: Suit[] = ["S", "H", "D", "C"];
@@ -396,6 +397,7 @@ export class GameEngine {
       pendingFasiolas: null,
       pendingFasiolasCards: new Map(),
       lastAction: null,
+      matchRewards: null,
     });
     return { roomCode, playerId };
   }
@@ -771,6 +773,9 @@ export class GameEngine {
         loserPlayerId: room.loserPlayerId,
         finalRankingPlayerIds: [...room.finalRankingPlayerIds],
         pendingFasiolas: room.pendingFasiolas,
+        matchRewards: room.matchRewards
+          ? room.matchRewards.map(({ playerId, placement, reward, won }) => ({ playerId, placement, reward, won }))
+          : null,
       },
     };
   }
@@ -1085,6 +1090,7 @@ export class GameEngine {
       });
     });
 
+    room.matchRewards = rewardRecords;
     this.matchRewardsListener?.(rewardRecords);
   }
 
