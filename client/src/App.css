@@ -833,8 +833,6 @@ button:disabled {
     url('./assets/onboarding_bg.jpg') center / cover no-repeat !important;
 }
 
-.profileOnboardingHeader h1,
-.profileOnboardingHeader p,
 .profileOnboardingAvatarName {
   text-shadow: 0 2px 6px rgba(20, 10, 4, 0.75);
 }
@@ -8088,4 +8086,13 @@ button:active {
     linear-gradient(90deg, rgba(10, 16, 28, 0.82) 0%, rgba(10, 16, 28, 0.45) 55%, rgba(10, 16, 28, 0.25) 100%),
     url('/heroes/dzeusas.png') right center / contain no-repeat,
     linear-gradient(180deg, rgba(25, 50, 81, 0.92), rgba(16, 35, 61, 0.94));
+}
+
+/* "Pasirink savo veikeja" antraste su auksinio remelio nuotrauka. */
+header.profileOnboardingHeader {
+  background: url('./assets/pasirinkimo_remelis.png') center / 100% 100% no-repeat !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0;
+  padding: 36px 76px;
 }
