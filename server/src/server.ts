@@ -1,6 +1,7 @@
 import "dotenv/config";
 import cors from "cors";
 import express from "express";
+import rateLimit from "express-rate-limit";
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
@@ -37,6 +38,8 @@ import { GameEngine } from "./gameEngine";
 const CLIENT_URL = process.env.CLIENT_URL ?? "http://localhost:5173";
 const APP_SECRET = process.env.APP_SECRET ?? "dev-secret-change-me";
 const REGISTRATION_STARTER_POINTS = 250;
+const RESEND_API_KEY = process.env.RESEND_API_KEY?.trim() || null;
+const MAIL_FROM = process.env.MAIL_FROM?.trim() || "Fasiolas <onboarding@resend.dev>";
 const ALLOWED_ORIGINS_RAW = process.env.ALLOWED_ORIGINS ?? CLIENT_URL;
 
 function normalizeOrigin(value: string): string {
@@ -48,6 +51,8 @@ const allowedOrigins = ALLOWED_ORIGINS_RAW.split(",")
   .filter((origin) => origin.length > 0);
 
 const app = express();
+// Render veikia uz reverse proxy - reikalinga, kad rate limiter matytu tikra IP.
+app.set("trust proxy", 1);
 app.use(
   cors({
     origin: allowedOrigins.length > 0 ? allowedOrigins : true,
@@ -57,6 +62,25 @@ app.use(express.json());
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
+
+const authLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "Per daug bandymu. Pabandyk veliau." },
+});
+
+const sensitiveLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "Per daug bandymu. Pabandyk po 15 minuciu." },
+});
+
+app.use(["/auth/login", "/auth/register"], authLimiter);
+app.use(["/auth/forgot-password", "/auth/reset-password"], sensitiveLimiter);
 
 const AUTH_USER_ID_REGEX = /^[a-f0-9]{32}$/i;
 
@@ -423,6 +447,36 @@ app.post("/auth/profile", async (req, res) => {
   }
 });
 
+async function sendResetEmail(toEmail: string, resetLink: string): Promise<void> {
+  if (!RESEND_API_KEY) {
+    console.warn("RESEND_API_KEY nenustatytas - reset laiskas neissiustas:", toEmail);
+    return;
+  }
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: MAIL_FROM,
+      to: [toEmail],
+      subject: "Fasiolas - slaptazodzio atstatymas",
+      html: [
+        "<p>Gavome prasyma atstatyti tavo Fasiolas paskyros slaptazodi.</p>",
+        `<p><a href="${resetLink}">Spausk cia, kad nustatytum nauja slaptazodi</a></p>`,
+        "<p>Nuoroda galioja 30 minuciu. Jei to nepraseisi - ignoruok si laiska.</p>",
+      ].join(""),
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Resend klaida ${response.status}: ${body.slice(0, 200)}`);
+  }
+}
+
 app.post("/auth/forgot-password", async (req, res) => {
   try {
     const parsed = forgotPasswordSchema.parse(req.body);
@@ -441,7 +495,18 @@ app.post("/auth/forgot-password", async (req, res) => {
           });
 
       const resetLink = `${CLIENT_URL}?resetToken=${tokenRaw}`;
-      previewResetLink = resetLink;
+
+      try {
+        await sendResetEmail(user.email, resetLink);
+      } catch (mailError) {
+        console.error("Nepavyko issiusti reset laisko:", mailError);
+      }
+
+      // Saugumo sumetimais nuoroda atsakyme rodoma tik ne produkcijoje -
+      // kitaip bet kas galetu perimti svetima paskyra.
+      if (process.env.NODE_ENV !== "production") {
+        previewResetLink = resetLink;
+      }
     }
 
     res.json({

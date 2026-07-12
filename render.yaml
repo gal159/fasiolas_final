@@ -16,6 +16,13 @@ services:
       # Jei nenustatytas, serveris naudoja NeDB faila DATA_DIR kataloge.
       - key: DATABASE_URL
         sync: false
+      # Resend API raktas slaptazodzio atstatymo laiskams (resend.com).
+      # Be jo laiskai nesiunciami (loginamas ispejimas).
+      - key: RESEND_API_KEY
+        sync: false
+      # Siuntejo adresas, pvz. "Fasiolas <noreply@lediniaisprendimai.com>".
+      - key: MAIL_FROM
+        sync: false
       - key: CLIENT_URL
         value: https://lediniaisprendimai.com
       - key: ALLOWED_ORIGINS
