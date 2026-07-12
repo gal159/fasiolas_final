@@ -8096,3 +8096,46 @@ header.profileOnboardingHeader {
   border-radius: 0;
   padding: 36px 76px;
 }
+
+/* Lyderiu lentele. */
+.leaderboardWindow {
+  max-width: 560px;
+}
+
+.leaderboardBody {
+  overflow-x: auto;
+}
+
+.leaderboardHint {
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+.leaderboardTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.leaderboardTable th,
+.leaderboardTable td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid rgba(120, 96, 66, 0.28);
+}
+
+.leaderboardTable th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.75;
+}
+
+.leaderboardTable tr.leaderboardSelf td {
+  font-weight: 700;
+  background: rgba(255, 205, 96, 0.18);
+}
+
+.leaderboardTable tbody tr:nth-child(1) td:first-child { color: #c99400; font-weight: 800; }
+.leaderboardTable tbody tr:nth-child(2) td:first-child { color: #8b8b8b; font-weight: 800; }
+.leaderboardTable tbody tr:nth-child(3) td:first-child { color: #a5602c; font-weight: 800; }

@@ -107,6 +107,15 @@ async function main(): Promise<void> {
   assert(byName.length === 1 && byName[0].id === user.id, "findAllByPlayerName randa nepaisant raidziu dydzio");
   assert((await store.findAllByPlayerName("nesamas")).length === 0, "findAllByPlayerName grazina tuscia nerastam");
 
+  // lyderiu lentele: rikiavimas pagal taskus mazejancia tvarka
+  const third = makeUser({ id: "d".repeat(32), email: "trecias@example.com", playerName: "Turtingas" });
+  third.account = { ...third.account, points: 9000 };
+  await store.upsert(third);
+  const top = await store.topPlayers(2);
+  assert(top.length === 2, "topPlayers grazina prasyta kieki");
+  assert(top[0].id === third.id, "topPlayers pirmas turi daugiausia tasku");
+  assert((top[0].account.points ?? 0) >= (top[1].account.points ?? 0), "topPlayers rikiuoja mazejancia tvarka");
+
   // unikalus email
   let duplicateBlocked = false;
   try {

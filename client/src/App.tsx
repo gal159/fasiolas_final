@@ -155,6 +155,15 @@ const SHOP_ITEM_LABELS: Record<ShopItemType, Record<string, string>> = {
 
 type AppStage = 'loading' | 'auth' | 'profileSetup' | 'hub'
 
+type LeaderboardEntry = {
+  playerName: string
+  points: number
+  gamesPlayed: number
+  gamesWon: number
+  gamesLost: number
+  level: number
+}
+
 function createEmptyAccount(): PlayerAccountState {
   const defaultAvatars = AVATAR_OPTIONS.filter((id) => AVATAR_RARITY[id] === 'common')
 
@@ -565,6 +574,9 @@ function App() {
   const [roomCodeInput, setRoomCodeInput] = useState('')
   const [roomCode, setRoomCode] = useState('')
   const [inviteCopied, setInviteCopied] = useState(false)
+  const [showLeaderboard, setShowLeaderboard] = useState(false)
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false)
   const [error, setError] = useState('')
   const [payload, setPayload] = useState<ClientStatePayload | null>(null)
   const [account, setAccount] = useState<PlayerAccountState>(createEmptyAccount())
@@ -798,6 +810,32 @@ function App() {
     void refreshAccountFromAuth()
     refreshShopCatalog()
   }, [showMarketplaceWindow])
+
+  useEffect(() => {
+    if (!showLeaderboard) {
+      return
+    }
+    let cancelled = false
+    setLeaderboardLoading(true)
+    fetch(`${SERVER_URL}/leaderboard`)
+      .then((response) => response.json())
+      .then((payload: { ok: boolean; players?: LeaderboardEntry[] }) => {
+        if (!cancelled && payload.ok && payload.players) {
+          setLeaderboard(payload.players)
+        }
+      })
+      .catch(() => {
+        // Palik sena sarasa, jei uzklausa nepavyko.
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLeaderboardLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [showLeaderboard])
 
   // Zaidimui pasibaigus atnaujinam paskyra is auth DB (taskai, W/L, lygis).
   // Nedidelis uzdelsimas, kad serveris spetu irasyti match rewards.
@@ -2476,6 +2514,9 @@ function App() {
           <button type="button" onClick={() => setShowMarketplaceWindow(true)}>
             Marketplace
           </button>
+          <button type="button" onClick={() => setShowLeaderboard(true)}>
+            Lyderiu lentele
+          </button>
         </div>
 
         <div className="profileQuickPanel">
@@ -2539,6 +2580,52 @@ function App() {
                   </div>
                 </div>
               </div>
+            </div>
+          </article>
+        </section>
+      ) : null}
+
+      {showLeaderboard ? (
+        <section className="profileWindowOverlay" role="dialog" aria-modal="true" aria-label="Lyderiu lentele">
+          <article className="profileWindow panel leaderboardWindow">
+            <div className="profileWindowHeader">
+              <h2>Lyderiu lentele</h2>
+              <button type="button" onClick={() => setShowLeaderboard(false)}>Uzdaryti</button>
+            </div>
+            <div className="profileWindowBody leaderboardBody">
+              {leaderboardLoading && leaderboard.length === 0 ? (
+                <p className="leaderboardHint">Kraunama...</p>
+              ) : leaderboard.length === 0 ? (
+                <p className="leaderboardHint">Dar nera zaideju.</p>
+              ) : (
+                <table className="leaderboardTable">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Zaidejas</th>
+                      <th>Lv.</th>
+                      <th>Taskai</th>
+                      <th>W</th>
+                      <th>L</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leaderboard.map((entry, index) => (
+                      <tr
+                        key={`${entry.playerName}-${index}`}
+                        className={entry.playerName === (name || me?.name) ? 'leaderboardSelf' : undefined}
+                      >
+                        <td>{index + 1}</td>
+                        <td>{entry.playerName}</td>
+                        <td>{entry.level}</td>
+                        <td>{entry.points}</td>
+                        <td>{entry.gamesWon}</td>
+                        <td>{entry.gamesLost}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </article>
         </section>

@@ -24,6 +24,7 @@ import {
   SKIN_OPTIONS,
   TABLE_OPTIONS,
   TABLE_RARITY,
+  calcLevel,
   type AuthBootstrapPayload,
   type PlayerAccountState,
   type PlayerCardInfo,
@@ -476,6 +477,26 @@ async function sendResetEmail(toEmail: string, resetLink: string): Promise<void>
     throw new Error(`Resend klaida ${response.status}: ${body.slice(0, 200)}`);
   }
 }
+
+app.get("/leaderboard", async (_req, res) => {
+  try {
+    const users = await authStore.topPlayers(20);
+    const players = users.map((user) => {
+      const account = normalizeAccount(user.account);
+      return {
+        playerName: user.playerName,
+        points: account.points,
+        gamesPlayed: account.gamesPlayed,
+        gamesWon: account.gamesWon,
+        gamesLost: account.gamesLost,
+        level: calcLevel(account.gamesPlayed),
+      };
+    });
+    res.json({ ok: true, players });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
 
 app.post("/auth/forgot-password", async (req, res) => {
   try {
