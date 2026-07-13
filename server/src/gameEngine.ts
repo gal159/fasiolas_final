@@ -90,6 +90,7 @@ type GameRoom = {
   lastAction: LastActionRecord | null;
   matchRewards: MatchRewardRecord[] | null;
   password: string | null;
+  lastActivityAt: number;
 };
 
 export type LobbySummary = {
@@ -575,6 +576,7 @@ export class GameEngine {
       lastAction: null,
       matchRewards: null,
       password: options?.password?.trim() || null,
+      lastActivityAt: Date.now(),
     });
     return { roomCode, playerId };
   }
@@ -1027,6 +1029,10 @@ export class GameEngine {
     } else if (room.phase === "LOBBY") {
       room.players = room.players.filter((p) => p.id !== playerId);
       room.dealerLog.push(`${player.name} paliko kambari`);
+      if (!room.players.some((p) => !p.isBot)) {
+        this.destroyRoom(roomCode);
+        return;
+      }
       this.roomStateListener?.(roomCode);
     }
   }
@@ -1479,7 +1485,79 @@ export class GameEngine {
     if (!room) {
       throw new Error("Room not found");
     }
+    // ponytail: aktyvumas zymimas kiekviename kreipinyje (iskaitant skaitymus
+    // po veiksmu) - to pakanka sweep'ui, atskiru bump'u nereikia.
+    room.lastActivityAt = Date.now();
     return room;
+  }
+
+  // Zaidejas samoningai palieka kambari (mygtukas "Grizti i main menu").
+  public leaveRoom(roomCode: string, playerId: string): void {
+    const room = this.rooms.get(roomCode);
+    const player = room?.players.find((p) => p.id === playerId);
+    if (!room || !player) {
+      return;
+    }
+    if (room.phase === "DEALING" || room.phase === "PLAYING") {
+      if (!player.isBot) {
+        player.isBot = true;
+        player.wasHuman = true;
+        player.connected = false;
+        room.dealerLog.push(`${player.name} paliko zaidima - toliau zaidzia botas`);
+        this.kickBots(roomCode);
+      }
+    } else {
+      room.players = room.players.filter((p) => p.id !== playerId);
+      room.dealerLog.push(`${player.name} paliko kambari`);
+    }
+    if (!room.players.some((p) => !p.isBot)) {
+      this.destroyRoom(roomCode);
+    }
+  }
+
+  public destroyRoom(roomCode: string): void {
+    const room = this.rooms.get(roomCode);
+    if (!room) {
+      return;
+    }
+    const botTimer = this.botTimers.get(roomCode);
+    if (botTimer) {
+      clearTimeout(botTimer);
+      this.botTimers.delete(roomCode);
+    }
+    for (const [key, timer] of this.disconnectTimers) {
+      if (key.startsWith(`${roomCode}:`)) {
+        clearTimeout(timer);
+        this.disconnectTimers.delete(key);
+      }
+    }
+    for (const p of room.players) {
+      this.playerAccounts.delete(p.id);
+    }
+    this.rooms.delete(roomCode);
+  }
+
+  // Apleistu kambariu valymas; grazina sunaikintu kambariu kodus.
+  public sweepRooms(): string[] {
+    const now = Date.now();
+    const finishedTtl = Number(process.env.FINISHED_ROOM_TTL_MS ?? 5 * 60 * 1000);
+    const lobbyTtl = Number(process.env.LOBBY_ROOM_TTL_MS ?? 60 * 60 * 1000);
+    const destroyed: string[] = [];
+    for (const room of this.rooms.values()) {
+      const idleMs = now - room.lastActivityAt;
+      const hasConnectedHuman = room.players.some((p) => !p.isBot && p.connected);
+      const expired =
+        (room.phase === "FINISHED" && idleMs > finishedTtl) ||
+        (room.phase === "LOBBY" && idleMs > lobbyTtl) ||
+        (!hasConnectedHuman && idleMs > finishedTtl);
+      if (expired) {
+        destroyed.push(room.code);
+      }
+    }
+    for (const code of destroyed) {
+      this.destroyRoom(code);
+    }
+    return destroyed;
   }
 
   private getPlayerOrThrow(room: GameRoom, playerId: string): InternalPlayer {

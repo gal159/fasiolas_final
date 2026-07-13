@@ -2482,6 +2482,9 @@ function App() {
   }
 
   function handleLogout(): void {
+    if (roomCode) {
+      socket?.emit('leave_room', {})
+    }
     sessionStorage.removeItem(LOGIN_SESSION_STORAGE_KEY)
     setAuthEmail('')
     setIsGuest(false)
@@ -2501,6 +2504,8 @@ function App() {
     const activeRoomCode = payload?.state.roomCode ?? roomCode
     if (activeRoomCode) {
       sessionStorage.removeItem(playerStorageKey(activeRoomCode))
+      // Pranesame serveriui, kad isejome - kambarys isvalomas arba vieta perima botas.
+      socket?.emit('leave_room', {})
     }
 
     setError('')

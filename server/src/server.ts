@@ -829,6 +829,14 @@ engine.setRoomStateListener((roomCode) => {
   emitRoomState(roomCode);
 });
 
+// Apleistu kambariu valymas: FINISHED/be zmoniu > 5 min, LOBBY > 60 min.
+setInterval(() => {
+  const destroyed = engine.sweepRooms();
+  for (const code of destroyed) {
+    io.socketsLeave(code);
+  }
+}, Number(process.env.ROOM_SWEEP_INTERVAL_MS ?? 60_000));
+
 // Kortos skridimo animacija transliuojama visiems, isskyrus veiksmo autoriu
 // (jis animuoja lokaliai). Botu veiksmai taip pat patenka cia.
 engine.setActionListener((roomCode, info) => {
@@ -896,6 +904,23 @@ io.on("connection", (socket) => {
     } catch (error) {
       ack?.({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
     }
+  });
+
+  socket.on("leave_room", (_payload, ack) => {
+    const roomCode = socket.data.roomCode as string | undefined;
+    const playerId = socket.data.playerId as string | undefined;
+    if (roomCode && playerId) {
+      engine.leaveRoom(roomCode, playerId);
+      socket.leave(roomCode);
+      socket.data.roomCode = undefined;
+      socket.data.playerId = undefined;
+      try {
+        emitRoomState(roomCode);
+      } catch {
+        // Kambarys jau sunaikintas (isejo paskutinis zmogus) - nieko nedarom.
+      }
+    }
+    ack?.({ ok: true });
   });
 
   socket.on("disconnect", () => {
