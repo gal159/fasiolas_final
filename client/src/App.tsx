@@ -1151,6 +1151,21 @@ function App() {
     return () => mq.removeEventListener('change', onChange)
   }, [])
 
+  // Realus matomo lango aukstis i CSS kintamaji: Brave/Chrome Android su apatine
+  // irankiu juosta 100dvh buna didesnis uz matoma plota ir stalo lango apacia nukerpama.
+  useEffect(() => {
+    const setAppVh = () => {
+      document.documentElement.style.setProperty('--app-vh', `${window.innerHeight}px`)
+    }
+    setAppVh()
+    window.addEventListener('resize', setAppVh)
+    window.visualViewport?.addEventListener('resize', setAppVh)
+    return () => {
+      window.removeEventListener('resize', setAppVh)
+      window.visualViewport?.removeEventListener('resize', setAppVh)
+    }
+  }, [])
+
   // Vieso lobby saraso atnaujinimas: kol zaidejas hub'e ir ne kambaryje.
   useEffect(() => {
     if (appStage !== 'hub' || !socket || roomCode) {

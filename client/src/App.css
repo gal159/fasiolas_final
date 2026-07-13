@@ -8373,3 +8373,29 @@ header.profileOnboardingHeader {
 .lobbyListEmpty {
   color: #e8d9bd;
 }
+
+/* Stalo langas visada telpa i realiai matoma plota (JS --app-vh is
+   window.innerHeight): apeina Brave/Chrome Android dvh + apatines
+   irankiu juostos nesutapima, del kurio buvo nukerpama rankos zona. */
+.tableWindow {
+  height: var(--app-vh, 100dvh);
+  min-height: var(--app-vh, 100dvh);
+}
+
+/* Kompaktiskesnis rankos dock telefone, kad liktu vietos stalui. */
+@media (max-width: 720px) {
+  .playingActionDock {
+    padding: 6px;
+    gap: 6px;
+    width: min(760px, 96vw);
+    bottom: 8px;
+  }
+
+  .playingActionCards {
+    max-height: 148px;
+  }
+
+  .playingActionDock strong {
+    font-size: 13px;
+  }
+}
