@@ -8414,3 +8414,9 @@ header.profileOnboardingHeader {
   font-weight: 700;
   font-size: 14px;
 }
+
+/* Atsijungusio zaidejo vieta pilkinama, kol laukiam grizimo. */
+.tableSeat.disconnectedSeat {
+  opacity: 0.55;
+  filter: grayscale(0.7);
+}

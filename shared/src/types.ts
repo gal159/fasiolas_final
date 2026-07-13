@@ -193,6 +193,8 @@ export interface PublicPlayerState {
   topCard: Card | null;
   profile: PlayerProfile;
   isBot: boolean;
+  // Nebutinas (senu klientu suderinamumas): false = zaidejas atsijunges.
+  connected?: boolean;
 }
 
 export interface MatchRewardEntry {

@@ -544,6 +544,7 @@ type Seat = {
   x: number
   y: number
   isMe: boolean
+  disconnected: boolean
 }
 
 function getRingRadiusPercent(playerCount: number): { x: number; y: number } {
@@ -1248,6 +1249,7 @@ function App() {
         x: 50 + Math.cos(angleRad) * radius.x,
         y: p.id === payload.yourPlayerId ? 99 : 50 + Math.sin(angleRad) * radius.y,
         isMe: p.id === payload.yourPlayerId,
+        disconnected: p.connected === false && !p.isBot,
       }
     })
   }, [payload, isNarrowViewport])
@@ -3086,6 +3088,7 @@ function App() {
                     seat.isMe ? 'me' : '',
                     (draggedCardIndex !== null || isRevealedCardDragged) && payload.state.phase === 'DEALING' && isMyTurn ? 'dropTarget' : '',
                     seat.id === payload.state.currentTurnPlayerId ? 'activeTurn' : '',
+                    seat.disconnected ? 'disconnectedSeat' : '',
                   ].filter(Boolean).join(' ')}
                   style={{ left: `${seat.x}%`, top: `${seat.y}%` }}
                   onDragOver={allowDrop}
@@ -3135,7 +3138,7 @@ function App() {
                         : null}
                     </div>
                   </div>
-                  <span>Kortos: {seat.cardCount}</span>
+                  <span>Kortos: {seat.cardCount}{seat.disconnected ? ' (atsijunge)' : ''}</span>
                 </div>
               ))}
             </div>

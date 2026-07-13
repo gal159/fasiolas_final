@@ -898,6 +898,17 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("disconnect", () => {
+    const roomCode = socket.data.roomCode as string | undefined;
+    const playerId = socket.data.playerId as string | undefined;
+    if (!roomCode || !playerId) {
+      return;
+    }
+    if (engine.handleDisconnect(roomCode, playerId, socket.id)) {
+      emitRoomState(roomCode);
+    }
+  });
+
   socket.on("list_lobbies", (_payload, ack) => {
     try {
       ack?.({ ok: true, lobbies: engine.listLobbies() });

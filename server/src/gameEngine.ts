@@ -55,6 +55,10 @@ type InternalPlayer = {
   authUserId: string | null;
   profile: PlayerProfile;
   isBot: boolean;
+  // Atsijungimu valdymas: connected=false kol laukiam grizimo;
+  // wasHuman=true zymi bota, kuris perime uz atsijungusi zmogu.
+  connected: boolean;
+  wasHuman?: boolean;
 };
 
 type LastActionRecord = {
@@ -302,6 +306,8 @@ export class GameEngine {
   private readonly rooms = new Map<string, GameRoom>();
   private readonly playerAccounts = new Map<string, PlayerAccountState>();
   private readonly botTimers = new Map<string, NodeJS.Timeout>();
+  // "roomCode:playerId" -> grace timeris po zaidejo atsijungimo.
+  private readonly disconnectTimers = new Map<string, NodeJS.Timeout>();
   private matchRewardsListener: ((rewards: MatchRewardRecord[]) => void) | null = null;
   private roomStateListener: ((roomCode: string) => void) | null = null;
   private actionListener: ((roomCode: string, info: ActionAnimationRecord) => void) | null = null;
@@ -550,6 +556,7 @@ export class GameEngine {
           authUserId: options?.authUserId ?? null,
           profile: playerProfile,
           isBot: false,
+          connected: true,
         },
       ],
       phase: "LOBBY",
@@ -618,6 +625,7 @@ export class GameEngine {
       authUserId: options?.authUserId ?? null,
       profile: playerProfile,
       isBot: false,
+      connected: true,
     });
     return { playerId };
   }
@@ -650,6 +658,7 @@ export class GameEngine {
       authUserId: null,
       profile: botProfile,
       isBot: true,
+      connected: true,
     });
     room.dealerLog.push(`${botName} prisijunge prie kambario`);
     return { playerId };
@@ -957,10 +966,69 @@ export class GameEngine {
   public updateSocket(roomCode: string, playerId: string, socketId: string): void {
     const room = this.getRoomOrThrow(roomCode);
     const player = room.players.find((p) => p.id === playerId);
-    if (!player) {
+    if (!player || (player.isBot && !player.wasHuman)) {
       throw new Error("Player not found");
     }
+    const timerKey = `${roomCode}:${playerId}`;
+    const timer = this.disconnectTimers.get(timerKey);
+    if (timer) {
+      clearTimeout(timer);
+      this.disconnectTimers.delete(timerKey);
+    }
     player.socketId = socketId;
+    player.connected = true;
+    if (player.isBot && player.wasHuman) {
+      player.isBot = false;
+      room.dealerLog.push(`${player.name} grizo i zaidima`);
+    }
+  }
+
+  // Zaidejo socketas nutruko: pazymim, praneshame ir po grace periodo
+  // perleidziam vieta botui (LOBBY fazeje - tiesiog isimam is kambario).
+  public handleDisconnect(roomCode: string, playerId: string, socketId: string): boolean {
+    const room = this.rooms.get(roomCode);
+    const player = room?.players.find((p) => p.id === playerId);
+    // Ignoruojam pasenusius socketus (pvz., antras tabas jau perime vieta).
+    if (!room || !player || player.isBot || player.socketId !== socketId) {
+      return false;
+    }
+    if (room.phase === "FINISHED") {
+      player.connected = false;
+      return true;
+    }
+    player.connected = false;
+    const graceMs = Number(process.env.DISCONNECT_GRACE_MS ?? 30000);
+    room.dealerLog.push(`${player.name} atsijunge - laukiame ${Math.round(graceMs / 1000)} s`);
+    const timerKey = `${roomCode}:${playerId}`;
+    const existing = this.disconnectTimers.get(timerKey);
+    if (existing) {
+      clearTimeout(existing);
+    }
+    const timer = setTimeout(() => {
+      this.disconnectTimers.delete(timerKey);
+      this.expireDisconnected(roomCode, playerId);
+    }, graceMs);
+    this.disconnectTimers.set(timerKey, timer);
+    return true;
+  }
+
+  private expireDisconnected(roomCode: string, playerId: string): void {
+    const room = this.rooms.get(roomCode);
+    const player = room?.players.find((p) => p.id === playerId);
+    if (!room || !player || player.connected || player.isBot) {
+      return;
+    }
+    if (room.phase === "DEALING" || room.phase === "PLAYING") {
+      player.isBot = true;
+      player.wasHuman = true;
+      room.dealerLog.push(`Uz ${player.name} toliau zaidzia botas`);
+      this.roomStateListener?.(roomCode);
+      this.kickBots(roomCode);
+    } else if (room.phase === "LOBBY") {
+      room.players = room.players.filter((p) => p.id !== playerId);
+      room.dealerLog.push(`${player.name} paliko kambari`);
+      this.roomStateListener?.(roomCode);
+    }
   }
 
   public getClientState(roomCode: string, viewerPlayerId: string): ClientStatePayload {
@@ -992,6 +1060,7 @@ export class GameEngine {
           topCard: p.cards[p.cards.length - 1] ?? null,
           profile: p.profile,
           isBot: p.isBot,
+          connected: p.connected,
         })),
         centerDeckCount: room.centerDeck.length,
         revealedDrawCard: room.revealedDrawCard,
