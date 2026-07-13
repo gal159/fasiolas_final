@@ -8,7 +8,7 @@ Realaus laiko daugelio žaidėjų kortų žaidimas. Monorepo: `client` (React + 
 
 ```bash
 # Serveris (port 3001)
-cd server && npm run dev            # tsx watch
+cd server && npm run dev            # tsx BE watch - po kodo pakeitimu restartuok ranka!
 npx tsc -p tsconfig.json --noEmit   # typecheck
 npx tsx scripts/test-postgres-store.ts   # Postgres store testai (pg-mem)
 
