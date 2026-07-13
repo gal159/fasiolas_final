@@ -582,6 +582,9 @@ function App() {
   const [roomCodeInput, setRoomCodeInput] = useState('')
   const [roomCode, setRoomCode] = useState('')
   const [roomPasswordInput, setRoomPasswordInput] = useState('')
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'reconnecting'>('connected')
+  // Socket effect'ui (mount'inamas viena karta) reikia gyvu reiksmiu rejoin'ui.
+  const rejoinRef = useRef({ roomCode: '', name: '' })
   const [lobbies, setLobbies] = useState<LobbySummary[]>([])
   const [isGuest, setIsGuest] = useState(false)
   const [inviteCopied, setInviteCopied] = useState(false)
@@ -656,6 +659,33 @@ function App() {
 
   useEffect(() => {
     const s = io(SERVER_URL)
+    s.on('disconnect', () => setConnectionStatus('reconnecting'))
+    s.on('connect', () => {
+      setConnectionStatus('connected')
+      // Auto-rejoin po rysio nutrukimo: sessionStorage playerId rebindina socketa.
+      const code = rejoinRef.current.roomCode
+      if (!code) {
+        return
+      }
+      const existingPlayerId = sessionStorage.getItem(playerStorageKey(code))
+      if (!existingPlayerId) {
+        return
+      }
+      s.emit(
+        'join_room',
+        { roomCode: code, name: rejoinRef.current.name || 'Player', existingPlayerId },
+        (response: { ok: boolean; error?: string }) => {
+          if (!response?.ok) {
+            // Kambarys zuvo (pvz., serveris persikrove) - graziname i main menu.
+            sessionStorage.removeItem(playerStorageKey(code))
+            setPayload(null)
+            setRoomCode('')
+            setShowTableWindow(false)
+            setError('Kambarys nebeegzistuoja - serveris persikrove')
+          }
+        },
+      )
+    })
     s.on('state_sync', (nextPayload: ClientStatePayload) => {
       const normalizedPlayers = nextPayload.state.players.map((player, index) => ({
         ...player,
@@ -1150,6 +1180,10 @@ function App() {
     mq.addEventListener('change', onChange)
     return () => mq.removeEventListener('change', onChange)
   }, [])
+
+  useEffect(() => {
+    rejoinRef.current = { roomCode, name }
+  }, [roomCode, name])
 
   // Realus matomo lango aukstis i CSS kintamaji: Brave/Chrome Android su apatine
   // irankiu juosta 100dvh buna didesnis uz matoma plota ir stalo lango apacia nukerpama.
@@ -2652,6 +2686,9 @@ function App() {
 
   return (
     <div className="page mainMenuPage">
+      {connectionStatus === 'reconnecting' ? (
+        <div className="connectionBanner">Rysys nutruko - jungiames is naujo...</div>
+      ) : null}
       <header>
         <div className="headerRow">
           <h1 className="mainMenuAnimatedTitle">FASIOLAS</h1>
