@@ -3484,6 +3484,9 @@ body:has(.tableWindowOverlay) {
   padding: 0;
   display: grid;
   gap: 0;
+  /* Turinys (max-content takelis) gali buti platesnis uz dezute -
+     centruojam pati takeli, kitaip perteklius kyso tik i desine. */
+  justify-content: center;
   justify-items: center;
   text-align: center;
   box-shadow: none;
