@@ -85,6 +85,14 @@ type GameRoom = {
   pendingFasiolasCards: Map<string, Card>;
   lastAction: LastActionRecord | null;
   matchRewards: MatchRewardRecord[] | null;
+  password: string | null;
+};
+
+export type LobbySummary = {
+  roomCode: string;
+  hostName: string;
+  playerCount: number;
+  hasPassword: boolean;
 };
 
 const SUITS: Suit[] = ["S", "H", "D", "C"];
@@ -525,7 +533,7 @@ export class GameEngine {
     hostName: string,
     socketId: string,
     profile?: PlayerProfile,
-    options?: { authUserId?: string | null; registeredAt?: number },
+    options?: { authUserId?: string | null; registeredAt?: number; password?: string | null },
   ): { roomCode: string; playerId: string } {
     const roomCode = Math.random().toString(36).slice(2, 8).toUpperCase();
     const playerId = randomUUID();
@@ -559,8 +567,27 @@ export class GameEngine {
       pendingFasiolasCards: new Map(),
       lastAction: null,
       matchRewards: null,
+      password: options?.password?.trim() || null,
     });
     return { roomCode, playerId };
+  }
+
+  // Vieso lobby saraso santrauka: tik dar neprasideje kambariai.
+  public listLobbies(): LobbySummary[] {
+    const lobbies: LobbySummary[] = [];
+    for (const room of this.rooms.values()) {
+      if (room.phase !== "LOBBY") {
+        continue;
+      }
+      const host = room.players.find((p) => !p.isBot) ?? room.players[0];
+      lobbies.push({
+        roomCode: room.code,
+        hostName: host?.name ?? "?",
+        playerCount: room.players.length,
+        hasPassword: Boolean(room.password),
+      });
+    }
+    return lobbies;
   }
 
   public joinRoom(
@@ -568,7 +595,7 @@ export class GameEngine {
     name: string,
     socketId: string,
     profile?: PlayerProfile,
-    options?: { authUserId?: string | null; registeredAt?: number },
+    options?: { authUserId?: string | null; registeredAt?: number; password?: string | null },
   ): { playerId: string } {
     const room = this.getRoomOrThrow(roomCode);
     if (room.players.length >= 8) {
@@ -576,6 +603,9 @@ export class GameEngine {
     }
     if (room.phase !== "LOBBY") {
       throw new Error("Game already started");
+    }
+    if (room.password && room.password !== (options?.password?.trim() || "")) {
+      throw new Error("Neteisingas kambario slaptazodis");
     }
     const playerId = randomUUID();
     const playerProfile = profile ?? createDefaultProfile(room.players.length);

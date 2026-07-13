@@ -156,6 +156,13 @@ const SHOP_ITEM_LABELS: Record<ShopItemType, Record<string, string>> = {
 
 type AppStage = 'loading' | 'auth' | 'profileSetup' | 'hub'
 
+type LobbySummary = {
+  roomCode: string
+  hostName: string
+  playerCount: number
+  hasPassword: boolean
+}
+
 type LeaderboardEntry = {
   playerName: string
   points: number
@@ -574,6 +581,9 @@ function App() {
   const [name, setName] = useState('')
   const [roomCodeInput, setRoomCodeInput] = useState('')
   const [roomCode, setRoomCode] = useState('')
+  const [roomPasswordInput, setRoomPasswordInput] = useState('')
+  const [lobbies, setLobbies] = useState<LobbySummary[]>([])
+  const [isGuest, setIsGuest] = useState(false)
   const [inviteCopied, setInviteCopied] = useState(false)
   const [showLeaderboard, setShowLeaderboard] = useState(false)
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
@@ -1141,6 +1151,27 @@ function App() {
     return () => mq.removeEventListener('change', onChange)
   }, [])
 
+  // Vieso lobby saraso atnaujinimas: kol zaidejas hub'e ir ne kambaryje.
+  useEffect(() => {
+    if (appStage !== 'hub' || !socket || roomCode) {
+      return
+    }
+    let cancelled = false
+    const fetchLobbies = () => {
+      socket.emit('list_lobbies', {}, (response: { ok: boolean; lobbies?: LobbySummary[] }) => {
+        if (!cancelled && response?.ok && Array.isArray(response.lobbies)) {
+          setLobbies(response.lobbies)
+        }
+      })
+    }
+    fetchLobbies()
+    const timer = window.setInterval(fetchLobbies, 4000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [appStage, socket, roomCode])
+
   const tableSeats = useMemo<Seat[]>(() => {
     if (!payload || payload.state.players.length === 0) {
       return []
@@ -1401,6 +1432,7 @@ function App() {
       {
         name: name || 'Player',
         authUserId: getStoredAuthUserId(),
+        password: roomPasswordInput.trim() || undefined,
         profile: withSlot(profileDraft, activeProfileSlot),
       },
       (response) => {
@@ -1413,10 +1445,15 @@ function App() {
     )
   }
 
-  function joinRoom(): void {
-    const normalized = roomCodeInput.trim().toUpperCase()
+  function joinRoom(codeOverride?: string, requiresPassword = false): void {
+    const normalized = (codeOverride ?? roomCodeInput).trim().toUpperCase()
     if (!normalized) {
       setError('Ivesk kambario koda')
+      return
+    }
+    if (requiresPassword && !roomPasswordInput.trim()) {
+      setRoomCodeInput(normalized)
+      setError('Kambarys apsaugotas: ivesk slaptazodi laukelyje "Slaptazodis"')
       return
     }
     const existingPlayerId = sessionStorage.getItem(playerStorageKey(normalized)) ?? undefined
@@ -1427,10 +1464,12 @@ function App() {
         name: name || 'Player',
         authUserId: getStoredAuthUserId(),
         existingPlayerId,
+        password: roomPasswordInput.trim() || undefined,
         profile: withSlot(profileDraft, activeProfileSlot),
       },
       (response) => {
         setRoomCode(normalized)
+        setRoomCodeInput(normalized)
         sessionStorage.setItem(playerStorageKey(normalized), String(response.playerId))
         refreshAccount()
         refreshShopCatalog()
@@ -1451,6 +1490,10 @@ function App() {
   }
 
   async function persistProfileSelection(completeSetup = false): Promise<boolean> {
+    // Sveciui profilis gyvena tik siame sesijos lange - nieko nesaugom serveryje.
+    if (isGuest) {
+      return true
+    }
     if (!authEmail) {
       setError('Nerasta prisijungimo sesija')
       return false
@@ -2376,9 +2419,21 @@ function App() {
     }
   }
 
+  function startGuestSession(): void {
+    setIsGuest(true)
+    setAccount(createEmptyAccount())
+    if (!name) {
+      setName(`Svecias${Math.floor(1000 + Math.random() * 9000)}`)
+    }
+    setLoginError('')
+    setLoginInfo('')
+    setAppStage('profileSetup')
+  }
+
   function handleLogout(): void {
     sessionStorage.removeItem(LOGIN_SESSION_STORAGE_KEY)
     setAuthEmail('')
+    setIsGuest(false)
     setAppStage('auth')
     sessionStorage.removeItem(AUTH_USER_ID_STORAGE_KEY)
     setLoginPassword('')
@@ -2529,7 +2584,13 @@ function App() {
                 Grizti i prisijungima
               </button>
             ) : null}
+            <button type="button" className="guestPlayButton" onClick={startGuestSession}>
+              Zaisti be paskyros
+            </button>
           </div>
+          {roomCodeInput ? (
+            <p className="loginHint">Turi kvietima i kambari {roomCodeInput} - gali zaisti ir be paskyros.</p>
+          ) : null}
           {loginInfo ? <div className="success">{loginInfo}</div> : null}
           {loginError ? <div className="error">{loginError}</div> : null}
         </section>
@@ -2597,9 +2658,18 @@ function App() {
             placeholder="Kodas"
           />
         </div>
+        <div className="row">
+          <label htmlFor="room-password">Slaptazodis</label>
+          <input
+            id="room-password"
+            value={roomPasswordInput}
+            onChange={(event) => setRoomPasswordInput(event.target.value)}
+            placeholder="Kambario slaptazodis (nebutina)"
+          />
+        </div>
         <div className="actions">
           <button onClick={createRoom}>Sukurti kambari</button>
-          <button onClick={joinRoom}>Prisijungti</button>
+          <button onClick={() => joinRoom()}>Prisijungti</button>
           <button disabled={!roomCode} onClick={startGame}>
             Pradeti zaidima
           </button>
@@ -2618,6 +2688,29 @@ function App() {
             Lyderiu lentele
           </button>
         </div>
+
+        {!roomCode ? (
+          <div className="lobbyList" aria-label="Aktyvus kambariai">
+            <h3>Aktyvus kambariai</h3>
+            {lobbies.length === 0 ? (
+              <p className="lobbyListEmpty">Siuo metu atviru kambariu nera. Sukurk sava!</p>
+            ) : (
+              <ul className="lobbyListRows">
+                {lobbies.map((lobby) => (
+                  <li key={lobby.roomCode} className="lobbyListRow">
+                    <span className="lobbyListHost">{lobby.hostName}</span>
+                    <span className="lobbyListMeta">
+                      Kodas: {lobby.roomCode} | Zaidejai: {lobby.playerCount}/8{lobby.hasPassword ? ' | Uzrakintas' : ''}
+                    </span>
+                    <button type="button" onClick={() => joinRoom(lobby.roomCode, lobby.hasPassword)}>
+                      {lobby.hasPassword ? 'Jungtis su slaptazodziu' : 'Jungtis'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
 
         <div className="profileQuickPanel">
           <div className="profileQuickInfo">
@@ -3172,6 +3265,21 @@ function App() {
             <div className="resultsActions">
               <button type="button" onClick={returnToMainMenu}>Grizti i main menu</button>
             </div>
+
+            {isGuest ? (
+              <div className="guestRegisterCta">
+                <p>Patiko zaidimas? Susikurk paskyra - gausi 250 tasku startui, o taskai uz partijas kaupsis kosmetikoms.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleLogout()
+                    setAuthMode('register')
+                  }}
+                >
+                  Susikurti paskyra
+                </button>
+              </div>
+            ) : null}
           </article>
         </section>
       ) : null}

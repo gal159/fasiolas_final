@@ -8282,3 +8282,84 @@ header.profileOnboardingHeader {
 .leaderboardWindow .leaderboardBody {
   display: block;
 }
+
+/* Lobby sarasas pagrindiniame meniu */
+.lobbyList {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid rgba(239, 205, 154, 0.4);
+  border-radius: 10px;
+  background: rgba(30, 20, 12, 0.55);
+}
+
+.lobbyList h3 {
+  margin: 0 0 8px;
+  color: #ffeecf;
+}
+
+.lobbyListEmpty {
+  margin: 0;
+  opacity: 0.75;
+  font-size: 14px;
+}
+
+.lobbyListRows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.lobbyListRow {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) 2fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid rgba(239, 205, 154, 0.25);
+  border-radius: 8px;
+  background: rgba(52, 34, 19, 0.5);
+}
+
+.lobbyListHost {
+  font-weight: 700;
+  color: #ffeecf;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lobbyListMeta {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+@media (max-width: 720px) {
+  .lobbyListRow {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    justify-items: start;
+  }
+}
+
+/* Sveciu rezimo CTA po partijos */
+.guestRegisterCta {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid rgba(165, 208, 244, 0.5);
+  border-radius: 10px;
+  background: rgba(18, 30, 46, 0.6);
+  text-align: center;
+}
+
+.guestRegisterCta p {
+  margin: 0 0 10px;
+}
+
+.lobbyListMeta,
+.lobbyListEmpty {
+  color: #e8d9bd;
+}

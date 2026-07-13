@@ -612,6 +612,7 @@ const createRoomSchema = z.object({
   name: z.string().trim().min(1).max(24),
   authUserId: z.string().trim().regex(AUTH_USER_ID_REGEX).optional(),
   profile: profileSchema.optional(),
+  password: z.string().trim().max(32).optional(),
 });
 
 const joinRoomSchema = z.object({
@@ -620,6 +621,7 @@ const joinRoomSchema = z.object({
   authUserId: z.string().trim().regex(AUTH_USER_ID_REGEX).optional(),
   existingPlayerId: z.string().uuid().optional(),
   profile: profileSchema.optional(),
+  password: z.string().trim().max(32).optional(),
 });
 
 const updateProfileSchema = z.object({
@@ -845,6 +847,7 @@ io.on("connection", (socket) => {
           const { roomCode, playerId } = engine.createRoom(effectiveName, socket.id, parsed.profile, {
             authUserId: resolvedAuthUser?.id ?? parsed.authUserId ?? null,
             registeredAt: resolvedAuthUser?.createdAt,
+            password: parsed.password ?? null,
           });
           socket.data.roomCode = roomCode;
           socket.data.playerId = playerId;
@@ -876,6 +879,7 @@ io.on("connection", (socket) => {
             const joined = engine.joinRoom(roomCode, effectiveName, socket.id, parsed.profile, {
               authUserId: resolvedAuthUser?.id ?? parsed.authUserId ?? null,
               registeredAt: resolvedAuthUser?.createdAt,
+              password: parsed.password ?? null,
             });
             playerId = joined.playerId;
           }
@@ -889,6 +893,14 @@ io.on("connection", (socket) => {
         .catch((error) => {
           ack?.({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
         });
+    } catch (error) {
+      ack?.({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  socket.on("list_lobbies", (_payload, ack) => {
+    try {
+      ack?.({ ok: true, lobbies: engine.listLobbies() });
     } catch (error) {
       ack?.({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
     }
