@@ -818,6 +818,11 @@ function emitRoomState(roomCode: string): void {
   }
 }
 
+// Botams atlikus veiksma variklis pranesa - issiunciam nauja busena zaidejams.
+engine.setRoomStateListener((roomCode) => {
+  emitRoomState(roomCode);
+});
+
 io.on("connection", (socket) => {
   socket.on("create_room", (payload: unknown, ack) => {
     try {
@@ -878,11 +883,26 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("add_bot", (_payload, ack) => {
+    try {
+      const roomCode = socket.data.roomCode as string;
+      if (!roomCode) {
+        throw new Error("Pirmiausia prisijunk prie kambario");
+      }
+      engine.addBot(roomCode);
+      emitRoomState(roomCode);
+      ack?.({ ok: true });
+    } catch (error) {
+      ack?.({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
   socket.on("start_game", (_payload, ack) => {
     try {
       const roomCode = socket.data.roomCode as string;
       engine.startGame(roomCode);
       emitRoomState(roomCode);
+      engine.kickBots(roomCode);
       ack?.({ ok: true });
     } catch (error) {
       ack?.({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
@@ -895,6 +915,7 @@ io.on("connection", (socket) => {
       const playerId = socket.data.playerId as string;
       engine.applyTurnAction(roomCode, playerId, action);
       emitRoomState(roomCode);
+      engine.kickBots(roomCode);
       ack?.({ ok: true });
     } catch (error) {
       ack?.({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
@@ -907,6 +928,7 @@ io.on("connection", (socket) => {
       const playerId = socket.data.playerId as string;
       engine.accuseFasiolas(roomCode, playerId, accusedPlayerId);
       emitRoomState(roomCode);
+      engine.kickBots(roomCode);
       ack?.({ ok: true });
     } catch (error) {
       ack?.({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
@@ -919,6 +941,7 @@ io.on("connection", (socket) => {
       const playerId = socket.data.playerId as string;
       engine.resolveFasiolasContribution(roomCode, playerId, cardIndex);
       emitRoomState(roomCode);
+      engine.kickBots(roomCode);
       ack?.({ ok: true });
     } catch (error) {
       ack?.({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });

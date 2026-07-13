@@ -53,6 +53,7 @@ type InternalPlayer = {
   socketId: string;
   authUserId: string | null;
   profile: PlayerProfile;
+  isBot: boolean;
 };
 
 type LastActionRecord = {
@@ -280,13 +281,133 @@ export type MatchRewardRecord = {
   won: boolean;
 };
 
+const BOT_NAMES = ["Botas Vytas", "Botas Aldona", "Botas Zenonas", "Botas Grazina", "Botas Kazys", "Botas Birute"];
+
+const BOT_ACTION_DELAY_MS = 800;
+
 export class GameEngine {
   private readonly rooms = new Map<string, GameRoom>();
   private readonly playerAccounts = new Map<string, PlayerAccountState>();
+  private readonly botTimers = new Map<string, NodeJS.Timeout>();
   private matchRewardsListener: ((rewards: MatchRewardRecord[]) => void) | null = null;
+  private roomStateListener: ((roomCode: string) => void) | null = null;
 
   public setMatchRewardsListener(listener: (rewards: MatchRewardRecord[]) => void): void {
     this.matchRewardsListener = listener;
+  }
+
+  public setRoomStateListener(listener: (roomCode: string) => void): void {
+    this.roomStateListener = listener;
+  }
+
+  // ---------------------------------------------------------------------
+  // Botai: po kiekvieno busenos pokycio patikrinam, ar botas turi veikti.
+  // Veiksmai atliekami po viena su uzdelsimu, kad atrodytu naturaliai.
+  // ---------------------------------------------------------------------
+
+  public kickBots(roomCode: string): void {
+    const room = this.rooms.get(roomCode);
+    if (!room || this.botTimers.has(roomCode) || !this.botHasPendingAction(room)) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      this.botTimers.delete(roomCode);
+      try {
+        if (this.performOneBotAction(roomCode)) {
+          this.roomStateListener?.(roomCode);
+          this.kickBots(roomCode);
+        }
+      } catch (error) {
+        console.error("Boto veiksmo klaida:", error);
+      }
+    }, BOT_ACTION_DELAY_MS);
+    this.botTimers.set(roomCode, timer);
+  }
+
+  private botHasPendingAction(room: GameRoom): boolean {
+    if (room.phase !== "DEALING" && room.phase !== "PLAYING") {
+      return false;
+    }
+    if (room.pendingFasiolas) {
+      const pending = room.pendingFasiolas;
+      return room.players.some(
+        (p) =>
+          p.isBot &&
+          pending.requiredFromPlayerIds.includes(p.id) &&
+          !pending.contributedFromPlayerIds.includes(p.id),
+      );
+    }
+    const current = room.players.find((p) => p.id === room.currentTurnPlayerId);
+    return Boolean(current?.isBot);
+  }
+
+  private performOneBotAction(roomCode: string): boolean {
+    const room = this.rooms.get(roomCode);
+    if (!room || !this.botHasPendingAction(room)) {
+      return false;
+    }
+
+    // Fasiolo bauda: botas atiduoda seniausia (ne virsutine) korta.
+    if (room.pendingFasiolas) {
+      const pending = room.pendingFasiolas;
+      const bot = room.players.find(
+        (p) =>
+          p.isBot &&
+          pending.requiredFromPlayerIds.includes(p.id) &&
+          !pending.contributedFromPlayerIds.includes(p.id),
+      );
+      if (!bot) {
+        return false;
+      }
+      this.resolveFasiolasContribution(roomCode, bot.id, 0);
+      return true;
+    }
+
+    const bot = room.players.find((p) => p.id === room.currentTurnPlayerId);
+    if (!bot || !bot.isBot) {
+      return false;
+    }
+
+    if (room.phase === "DEALING") {
+      this.applyTurnAction(roomCode, bot.id, this.decideBotDealingAction(room, bot));
+      return true;
+    }
+
+    if (room.phase === "PLAYING") {
+      const playableIdx = this.findPlayableCardIndex(room, bot);
+      const action: PlayingAction = playableIdx >= 0 ? { type: "PLAY_CARD", cardIndex: playableIdx } : { type: "TAKE_OLDEST" };
+      this.applyTurnAction(roomCode, bot.id, action);
+      return true;
+    }
+
+    return false;
+  }
+
+  private decideBotDealingAction(room: GameRoom, bot: InternalPlayer): DealingAction {
+    const others = room.players.filter((p) => p.id !== bot.id);
+
+    // 1. Jei jau atversta korta - padeti pagal taisykles: kitam, jei +1 legalu.
+    if (room.revealedDrawCard) {
+      const drawn = room.revealedDrawCard;
+      const plusOneTarget = others.find((p) => canApplyPlusOne(p.cards[p.cards.length - 1] ?? null, drawn));
+      return { type: "PLACE_REVEALED", toPlayerId: plusOneTarget?.id ?? bot.id };
+    }
+
+    // 2. Jei sava virsutine korta legaliai limpa kitam (+1) - perkelti.
+    const botTop = bot.cards[bot.cards.length - 1] ?? null;
+    if (botTop) {
+      const moveTarget = others.find((p) => canApplyPlusOne(p.cards[p.cards.length - 1] ?? null, botTop));
+      if (moveTarget) {
+        return { type: "MOVE_VISIBLE_CARD", toPlayerId: moveTarget.id };
+      }
+    }
+
+    // 3. Kitu atveju traukti is kalades (jei tuscia - baigti ejima).
+    if (room.centerDeck.length > 0) {
+      return { type: "DRAW_REVEAL" };
+    }
+    return { type: "END_TURN" };
   }
 
   private recordLastAction(
@@ -381,6 +502,7 @@ export class GameEngine {
           socketId,
           authUserId: options?.authUserId ?? null,
           profile: playerProfile,
+          isBot: false,
         },
       ],
       phase: "LOBBY",
@@ -426,7 +548,41 @@ export class GameEngine {
       socketId,
       authUserId: options?.authUserId ?? null,
       profile: playerProfile,
+      isBot: false,
     });
+    return { playerId };
+  }
+
+  public addBot(roomCode: string): { playerId: string } {
+    const room = this.getRoomOrThrow(roomCode);
+    if (room.players.length >= 8) {
+      throw new Error("Room is full");
+    }
+    if (room.phase !== "LOBBY") {
+      throw new Error("Bota galima prideti tik lobby fazeje");
+    }
+
+    const usedNames = new Set(room.players.map((p) => p.name));
+    const botName =
+      BOT_NAMES.find((candidate) => !usedNames.has(candidate)) ??
+      `Botas ${room.players.filter((p) => p.isBot).length + 1}`;
+
+    const playerId = randomUUID();
+    const botProfile = createDefaultProfile(room.players.length);
+    const commonAvatars = AVATAR_OPTIONS.filter((id) => AVATAR_RARITY[id] === "common");
+    botProfile.avatarId = commonAvatars[Math.floor(Math.random() * commonAvatars.length)];
+
+    this.ensureAccount(playerId, botProfile);
+    room.players.push({
+      id: playerId,
+      name: botName,
+      cards: [],
+      socketId: `bot:${playerId}`,
+      authUserId: null,
+      profile: botProfile,
+      isBot: true,
+    });
+    room.dealerLog.push(`${botName} prisijunge prie kambario`);
     return { playerId };
   }
 
@@ -763,6 +919,7 @@ export class GameEngine {
           cardCount: p.cards.length,
           topCard: p.cards[p.cards.length - 1] ?? null,
           profile: p.profile,
+          isBot: p.isBot,
         })),
         centerDeckCount: room.centerDeck.length,
         revealedDrawCard: room.revealedDrawCard,

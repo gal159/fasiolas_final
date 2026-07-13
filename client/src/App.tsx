@@ -2511,6 +2511,11 @@ function App() {
           <button type="button" disabled={!roomCode} onClick={() => { void copyInviteLink() }}>
             {inviteCopied ? 'Nukopijuota!' : 'Kopijuoti kvietima'}
           </button>
+          {payload?.state.phase === 'LOBBY' ? (
+            <button type="button" onClick={() => emitAck('add_bot', {})}>
+              Iskviesti bota
+            </button>
+          ) : null}
           <button type="button" onClick={() => setShowMarketplaceWindow(true)}>
             Marketplace
           </button>

@@ -191,6 +191,7 @@ export interface PublicPlayerState {
   cardCount: number;
   topCard: Card | null;
   profile: PlayerProfile;
+  isBot: boolean;
 }
 
 export interface MatchRewardEntry {
