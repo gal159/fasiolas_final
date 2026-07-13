@@ -64,9 +64,12 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
+// Dev aplinkoje limitai dideli, kad netrukdytu testams.
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
 const authLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
-  limit: 20,
+  limit: IS_PRODUCTION ? 20 : 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { ok: false, error: "Per daug bandymu. Pabandyk veliau." },
@@ -74,7 +77,7 @@ const authLimiter = rateLimit({
 
 const sensitiveLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 5,
+  limit: IS_PRODUCTION ? 5 : 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { ok: false, error: "Per daug bandymu. Pabandyk po 15 minuciu." },
