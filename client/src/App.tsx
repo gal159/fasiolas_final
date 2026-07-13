@@ -1067,6 +1067,17 @@ function App() {
 
   const isMyTurn = Boolean(payload && payload.state.currentTurnPlayerId === payload.yourPlayerId)
 
+  // Vibracija telefone (Android; iOS Safari vibrate API nepalaiko), kai ateina tavo eile.
+  const wasMyTurnRef = useRef(false)
+  useEffect(() => {
+    const phase = payload?.state.phase
+    const inGame = phase === 'DEALING' || phase === 'PLAYING'
+    if (isMyTurn && inGame && !wasMyTurnRef.current && 'vibrate' in navigator) {
+      navigator.vibrate([200, 90, 200])
+    }
+    wasMyTurnRef.current = isMyTurn
+  }, [isMyTurn, payload?.state.phase])
+
   const profilePanelProfile = useMemo(
     () => me?.profile ?? withSlot(profileDraft, activeProfileSlot),
     [activeProfileSlot, me, profileDraft],
