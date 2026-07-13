@@ -1247,6 +1247,11 @@ export class GameEngine {
     if (room.tableStack.length >= room.players.length) {
       room.tableStack = [];
       room.currentTurnPlayerId = actorPlayerId;
+      // Baiges korteles zaidejas nebegauna ejimo - perduodam toliau.
+      const actor = room.players.find((p) => p.id === actorPlayerId);
+      if (actor && actor.cards.length === 0) {
+        this.advanceTurn(room);
+      }
       return;
     }
     this.advanceTurn(room);
@@ -1339,7 +1344,15 @@ export class GameEngine {
       return;
     }
 
-    const next = (idx + 1) % room.players.length;
+    let next = (idx + 1) % room.players.length;
+    if (room.phase === "PLAYING") {
+      // PLAYING fazeje be korteliu like zaidejai praleidziami (jie jau baige).
+      let hops = 0;
+      while (room.players[next] && room.players[next].cards.length === 0 && hops < room.players.length) {
+        next = (next + 1) % room.players.length;
+        hops += 1;
+      }
+    }
     const nextPlayerId = room.players[next]?.id ?? room.players[0]?.id ?? null;
 
     const activeLastAction = room.lastAction;
@@ -1513,6 +1526,38 @@ export class GameEngine {
     if (!room.players.some((p) => !p.isBot)) {
       this.destroyRoom(roomCode);
     }
+  }
+
+  // Rematch: FINISHED kambarys grazinamas i LOBBY. Islieka zmones ir tikri
+  // botai; wasHuman botai (atsijunge/isseje zaidejai) ismetami.
+  public rematch(roomCode: string): void {
+    const room = this.getRoomOrThrow(roomCode);
+    if (room.phase !== "FINISHED") {
+      throw new Error("Rematch galimas tik pasibaigus zaidimui");
+    }
+    const dropped = room.players.filter((p) => p.wasHuman || (!p.isBot && !p.connected));
+    room.players = room.players.filter((p) => !dropped.includes(p));
+    for (const p of dropped) {
+      this.playerAccounts.delete(p.id);
+    }
+    for (const p of room.players) {
+      p.cards = [];
+    }
+    room.phase = "LOBBY";
+    room.centerDeck = [];
+    room.revealedDrawCard = null;
+    room.tableStack = [];
+    room.currentTurnPlayerId = null;
+    room.lastNonSpadeDrawnSuit = null;
+    room.trumpSuit = null;
+    room.winnerPlayerIds = [];
+    room.loserPlayerId = null;
+    room.finalRankingPlayerIds = [];
+    room.pendingFasiolas = null;
+    room.pendingFasiolasCards = new Map();
+    room.lastAction = null;
+    room.matchRewards = null;
+    room.dealerLog = ["Naujas zaidimas - laukiame pradzios"];
   }
 
   public destroyRoom(roomCode: string): void {

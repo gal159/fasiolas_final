@@ -968,6 +968,17 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("rematch", (_payload, ack) => {
+    try {
+      const roomCode = socket.data.roomCode as string;
+      engine.rematch(roomCode);
+      emitRoomState(roomCode);
+      ack?.({ ok: true });
+    } catch (error) {
+      ack?.({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
   socket.on("take_turn_action", ({ action }: { action: TurnAction }, ack) => {
     try {
       const roomCode = socket.data.roomCode as string;

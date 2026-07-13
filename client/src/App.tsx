@@ -3323,6 +3323,7 @@ function App() {
             </div>
 
             <div className="resultsActions">
+              <button type="button" onClick={() => emitAck('rematch', {})}>Zaisti dar karta</button>
               <button type="button" onClick={returnToMainMenu}>Grizti i main menu</button>
             </div>
 
