@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type {
+  ActionAnimatedEvent,
   AvatarId,
   CardBackgroundId,
   TableId,
@@ -281,6 +282,10 @@ export type MatchRewardRecord = {
   won: boolean;
 };
 
+export type ActionAnimationRecord = ActionAnimatedEvent & {
+  actorSocketId: string;
+};
+
 const BOT_NAMES = ["Botas Vytas", "Botas Aldona", "Botas Zenonas", "Botas Grazina", "Botas Kazys", "Botas Birute"];
 
 const BOT_ACTION_DELAY_MS = 800;
@@ -291,6 +296,7 @@ export class GameEngine {
   private readonly botTimers = new Map<string, NodeJS.Timeout>();
   private matchRewardsListener: ((rewards: MatchRewardRecord[]) => void) | null = null;
   private roomStateListener: ((roomCode: string) => void) | null = null;
+  private actionListener: ((roomCode: string, info: ActionAnimationRecord) => void) | null = null;
 
   public setMatchRewardsListener(listener: (rewards: MatchRewardRecord[]) => void): void {
     this.matchRewardsListener = listener;
@@ -298,6 +304,39 @@ export class GameEngine {
 
   public setRoomStateListener(listener: (roomCode: string) => void): void {
     this.roomStateListener = listener;
+  }
+
+  public setActionListener(listener: (roomCode: string, info: ActionAnimationRecord) => void): void {
+    this.actionListener = listener;
+  }
+
+  // Surenka animacijai reikalinga informacija PRIES veiksmo pritaikyma
+  // (po jo atversta korta ar ranka jau pasikeitusi).
+  private buildAnimationInfo(
+    room: GameRoom,
+    actorPlayerId: string,
+    action: TurnAction,
+  ): ActionAnimationRecord | null {
+    const actor = room.players.find((p) => p.id === actorPlayerId);
+    if (!actor) {
+      return null;
+    }
+
+    const base = { actorPlayerId, actorSocketId: actor.socketId };
+
+    if (action.type === "PLACE_REVEALED") {
+      return { ...base, actionType: action.type, toPlayerId: action.toPlayerId, card: room.revealedDrawCard };
+    }
+    if (action.type === "MOVE_VISIBLE_CARD") {
+      return { ...base, actionType: action.type, toPlayerId: action.toPlayerId, card: actor.cards[actor.cards.length - 1] ?? null };
+    }
+    if (action.type === "PLAY_CARD") {
+      return { ...base, actionType: action.type, toPlayerId: null, card: actor.cards[action.cardIndex] ?? null };
+    }
+    if (action.type === "TAKE_OLDEST") {
+      return { ...base, actionType: action.type, toPlayerId: null, card: room.tableStack[0] ?? null };
+    }
+    return null;
   }
 
   // ---------------------------------------------------------------------
@@ -706,19 +745,22 @@ export class GameEngine {
       throw new Error("Not your turn");
     }
 
+    const animationInfo = this.buildAnimationInfo(room, actorPlayerId, action);
+
     if (room.phase === "DEALING") {
       this.applyDealingAction(room, actorPlayerId, action as DealingAction);
       this.tryTransitionToPlaying(room);
-      return;
-    }
-
-    if (room.phase === "PLAYING") {
+    } else if (room.phase === "PLAYING") {
       this.applyPlayingAction(room, actorPlayerId, action as PlayingAction);
       this.checkPlayEnd(room);
-      return;
+    } else {
+      throw new Error("Game is not active");
     }
 
-    throw new Error("Game is not active");
+    // Tik po sekmingo pritaikymo - klaidos atveju animacijos nereikia.
+    if (animationInfo) {
+      this.actionListener?.(roomCode, animationInfo);
+    }
   }
 
   public autoPlayDealingPhase(roomCode: string, actorPlayerId: string): void {

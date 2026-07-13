@@ -827,6 +827,13 @@ engine.setRoomStateListener((roomCode) => {
   emitRoomState(roomCode);
 });
 
+// Kortos skridimo animacija transliuojama visiems, isskyrus veiksmo autoriu
+// (jis animuoja lokaliai). Botu veiksmai taip pat patenka cia.
+engine.setActionListener((roomCode, info) => {
+  const { actorSocketId, ...event } = info;
+  io.to(roomCode).except(actorSocketId).emit("action_animated", event);
+});
+
 io.on("connection", (socket) => {
   socket.on("create_room", (payload: unknown, ack) => {
     try {

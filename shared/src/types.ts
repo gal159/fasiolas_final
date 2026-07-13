@@ -252,6 +252,14 @@ export type PlayingAction =
 
 export type TurnAction = DealingAction | PlayingAction;
 
+// Transliuojama kitiems kambario zaidejams, kad jie matytu kortos skridimo animacija.
+export interface ActionAnimatedEvent {
+  actorPlayerId: string;
+  actionType: TurnAction["type"];
+  toPlayerId: string | null;
+  card: Card | null;
+}
+
 export interface ClientStatePayload {
   state: PublicTableState;
   yourPlayerId: string;

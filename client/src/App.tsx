@@ -18,6 +18,7 @@ import {
   SKIN_OPTIONS,
   TABLE_OPTIONS,
   TABLE_RARITY,
+  type ActionAnimatedEvent,
   calcLevel,
   type Card,
   type ClientStatePayload,
@@ -676,6 +677,11 @@ function App() {
         setProfileDraft(withSlot(myPlayer.profile, slot))
       }
       setSelectedTargetId((current) => current || normalizedPayload.state.players[0]?.id || '')
+    })
+    // Kitu zaideju (ir botu) veiksmu animacijos: ivykis ateina PRIES state_sync,
+    // tad DOM dar rodo sena busena - rect'ai paimami is teisingu vietu.
+    s.on('action_animated', (info: ActionAnimatedEvent) => {
+      animateRemoteAction(info)
     })
     setSocket(s)
     return () => {
@@ -1567,6 +1573,64 @@ function App() {
       return
     }
     handlePlaceRevealedWithSlide(targetPlayerId)
+  }
+
+  function animateRemoteAction(info: ActionAnimatedEvent): void {
+    if (!info.card) {
+      return
+    }
+
+    const centerArea = centerDropRef.current
+    const seatOf = (id: string | null): HTMLElement | null => (id ? tableSeatRefs.current.get(id) ?? null : null)
+    const cardOfSeat = (seat: HTMLElement | null): HTMLElement | null =>
+      (seat?.querySelector('.seatTopCard') as HTMLElement | null) ?? seat
+
+    let source: HTMLElement | null = null
+    let target: HTMLElement | null = null
+
+    if (info.actionType === 'PLACE_REVEALED') {
+      source = (centerArea?.querySelector('.deckRevealAnim .playingCard') as HTMLElement | null) ?? centerArea
+      target = cardOfSeat(seatOf(info.toPlayerId))
+    } else if (info.actionType === 'MOVE_VISIBLE_CARD') {
+      source = cardOfSeat(seatOf(info.actorPlayerId))
+      target = cardOfSeat(seatOf(info.toPlayerId))
+    } else if (info.actionType === 'PLAY_CARD') {
+      source = cardOfSeat(seatOf(info.actorPlayerId))
+      target = centerArea
+    } else if (info.actionType === 'TAKE_OLDEST') {
+      source = centerArea
+      target = cardOfSeat(seatOf(info.actorPlayerId))
+    } else {
+      return
+    }
+
+    if (!source || !target) {
+      return
+    }
+
+    const sourceRect = source.getBoundingClientRect()
+    const targetRect = target.getBoundingClientRect()
+    if (!sourceRect.width || !targetRect.width) {
+      return
+    }
+
+    const fly = {
+      card: info.card,
+      fromX: sourceRect.left,
+      fromY: sourceRect.top,
+      toX: targetRect.left + (targetRect.width - sourceRect.width) / 2,
+      toY: targetRect.top + (targetRect.height - sourceRect.height) / 2,
+      width: sourceRect.width,
+      height: sourceRect.height,
+    }
+
+    if (info.actionType === 'PLAY_CARD') {
+      setFlyingPlayedCard(fly)
+      window.setTimeout(() => setFlyingPlayedCard(null), 330)
+    } else {
+      setFlyingRevealedCard(fly)
+      window.setTimeout(() => setFlyingRevealedCard(null), 330)
+    }
   }
 
   function handlePlaceRevealedWithSlide(targetPlayerId: string): void {
