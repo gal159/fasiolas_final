@@ -157,6 +157,7 @@ export interface PlayerAccountState {
 }
 
 export interface AuthBootstrapPayload {
+  userId: string;
   email: string;
   playerName: string;
   hasCompletedProfileSetup: boolean;

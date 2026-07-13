@@ -626,6 +626,11 @@ function App() {
     const nextEmail = bootstrap.email.trim().toLowerCase()
 
     sessionStorage.setItem(LOGIN_SESSION_STORAGE_KEY, nextEmail)
+    // KRITISKA: be authUserId kambarys kuriamas anonimiskai ir mačo
+    // rezultatai (taskai, W/L) neissaugomi i paskyra.
+    if (bootstrap.userId) {
+      sessionStorage.setItem(AUTH_USER_ID_STORAGE_KEY, bootstrap.userId)
+    }
     setAuthEmail(nextEmail)
     setName(bootstrap.playerName?.trim() || displayNameFromEmail(nextEmail))
     setAccount(normalizeAccountState(bootstrap.account))
@@ -846,6 +851,8 @@ function App() {
     }
     const timer = window.setTimeout(() => {
       void refreshAccountFromAuth()
+      // Isvalom korteliu info cache, kad apvertus matytusi nauja statistika.
+      setPlayerCardInfoCache({})
     }, 800)
     return () => window.clearTimeout(timer)
   }, [gamePhase])

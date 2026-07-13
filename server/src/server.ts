@@ -237,6 +237,7 @@ function normalizeAccount(account: PlayerAccountState | undefined): PlayerAccoun
 
 function toBootstrapPayload(user: AuthUser): AuthBootstrapPayload {
   return {
+    userId: user.id,
     email: user.email,
     playerName: user.playerName,
     hasCompletedProfileSetup: user.hasCompletedProfileSetup,
