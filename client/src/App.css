@@ -3881,9 +3881,16 @@ body:has(.tableWindowOverlay) {
     width: min(196px, 56vw);
   }
 
+  /* Drop zona turi atitikti matoma korteles ploti (badge ~96px), kitaip
+     seat'u dezutes persidengia ir vilkimo konturai dengia visa ekrana. */
   .tableSeat {
-    width: min(212px, 74vw);
-    padding: 7px;
+    width: min(120px, 30vw);
+    padding: 2px;
+  }
+
+  .tableSeat.dropTarget {
+    box-shadow: 0 0 0 2px rgba(255, 224, 170, 0.7);
+    border-radius: 12px;
   }
 
   .seatIdentityRow {
