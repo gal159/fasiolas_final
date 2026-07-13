@@ -8191,3 +8191,81 @@ header.profileOnboardingHeader {
   font-weight: 700;
   color: #1e7d3c;
 }
+
+/* Lyderiu lentele su ornamentiniu remo paveikslu (antraste jau paveiksle). */
+.profileWindowOverlay .profileWindow.leaderboardWindow {
+  width: min(760px, 94vw, calc(92vh * 1.4));
+  aspect-ratio: 1484 / 1060;
+  max-width: none;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 26px;
+  background: #16101f url('./assets/lyderiu_lentele.jpg') center / 100% 100% no-repeat !important;
+  box-shadow: 0 26px 60px rgba(0, 0, 0, 0.55) !important;
+  color: #f2e2bd !important;
+  overflow: hidden;
+}
+
+.leaderboardWindow .profileWindowHeader {
+  position: absolute;
+  top: 4%;
+  right: 4%;
+  z-index: 2;
+}
+
+.leaderboardWindow .profileWindowHeader h2 {
+  display: none;
+}
+
+.leaderboardWindow .leaderboardBody {
+  position: absolute;
+  inset: 20% 8% 8.5%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.leaderboardWindow .leaderboardTable th {
+  color: #d9b96f;
+  border-bottom: 1px solid rgba(214, 178, 110, 0.4);
+}
+
+.leaderboardWindow .leaderboardTable td {
+  color: #f2e2bd;
+  border-bottom: 1px solid rgba(214, 178, 110, 0.18);
+}
+
+.leaderboardWindow .leaderboardTable tr.leaderboardSelf td {
+  background: rgba(255, 205, 96, 0.14);
+  color: #ffe9b8;
+}
+
+.leaderboardWindow .leaderboardHint {
+  color: #e8d6a8;
+}
+
+.leaderboardWindow .leaderboardTable tbody tr:nth-child(1) td:first-child { color: #ffd24a; }
+.leaderboardWindow .leaderboardTable tbody tr:nth-child(2) td:first-child { color: #cfd4dc; }
+.leaderboardWindow .leaderboardTable tbody tr:nth-child(3) td:first-child { color: #e08a4e; }
+
+/* Remelio paveikslas pats yra dekoracija - isjungiam shimmer/ring sluoksnius. */
+.profileWindowOverlay .profileWindow.leaderboardWindow::before,
+.profileWindowOverlay .profileWindow.leaderboardWindow::after {
+  content: none;
+}
+
+.leaderboardWindow .leaderboardTable {
+  width: 100% !important;
+  table-layout: fixed;
+}
+
+.leaderboardWindow .leaderboardTable th:nth-child(1) { width: 9%; }
+.leaderboardWindow .leaderboardTable th:nth-child(2) { width: 39%; }
+.leaderboardWindow .leaderboardTable th:nth-child(3) { width: 12%; }
+.leaderboardWindow .leaderboardTable th:nth-child(4) { width: 20%; }
+.leaderboardWindow .leaderboardTable th:nth-child(5) { width: 10%; }
+.leaderboardWindow .leaderboardTable th:nth-child(6) { width: 10%; }
+
+/* profileWindowBody yra grid (300px stulpelis) - lentelei reikia pilno plocio. */
+.leaderboardWindow .leaderboardBody {
+  display: block;
+}
