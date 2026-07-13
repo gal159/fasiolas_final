@@ -3900,16 +3900,29 @@ body:has(.tableWindowOverlay) {
   }
 
   .tableSeat .profileBadge.compact {
-    transform: scale(0.66);
+    transform: scale(0.58);
     margin-bottom: -42px;
   }
 
   .tableSeat.me .profileBadge.compact {
-    margin-bottom: -104px;
+    margin-bottom: -110px;
   }
 
   .meSeatIdentityRow {
     margin-top: 36px;
+  }
+
+  /* Fasiolas skundimo blokas telefone: siauras stulpelis desineje,
+     kad neuzdengtu virsutinio zaidejo korteles. */
+  .fasiolasDock {
+    max-width: 42vw;
+    padding: 6px;
+    gap: 4px;
+  }
+
+  .fasiolasDock .fasiolasButtons button {
+    font-size: 11px;
+    padding: 4px 8px;
   }
 
   .profileMeta {

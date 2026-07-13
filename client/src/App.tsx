@@ -1129,6 +1129,18 @@ function App() {
     }
   }, [payload?.state.phase, payload])
 
+  // Siaurame ekrane (telefonas) soniniu vietu korteles kerpa ekrano krastai -
+  // traukiam ziedo x spinduli i vidu. Breakpoint sutampa su App.css 720px.
+  const [isNarrowViewport, setIsNarrowViewport] = useState(
+    () => window.matchMedia('(max-width: 720px)').matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 720px)')
+    const onChange = (event: MediaQueryListEvent) => setIsNarrowViewport(event.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+
   const tableSeats = useMemo<Seat[]>(() => {
     if (!payload || payload.state.players.length === 0) {
       return []
@@ -1140,7 +1152,8 @@ function App() {
       players.findIndex((p) => p.id === payload.yourPlayerId),
       0,
     )
-    const radius = getRingRadiusPercent(total)
+    const fullRadius = getRingRadiusPercent(total)
+    const radius = isNarrowViewport ? { x: Math.min(fullRadius.x, 33), y: fullRadius.y } : fullRadius
 
     return players.map((p, absoluteIndex) => {
       const relativeIndex = (absoluteIndex - meIndex + total) % total
@@ -1157,7 +1170,7 @@ function App() {
         isMe: p.id === payload.yourPlayerId,
       }
     })
-  }, [payload])
+  }, [payload, isNarrowViewport])
 
   const finalStandings = useMemo(() => {
     if (!payload || payload.state.phase !== 'FINISHED') {
