@@ -8420,3 +8420,18 @@ header.profileOnboardingHeader {
   opacity: 0.55;
   filter: grayscale(0.7);
 }
+
+/* Taisykliu modalas: aukstas tekstas slenka dialogo viduje */
+.rulesDialog {
+  max-height: 80vh;
+  overflow-y: auto;
+  max-width: 560px;
+  text-align: left;
+}
+.rulesDialog h3 {
+  margin: 14px 0 4px;
+}
+.rulesDialog p {
+  margin: 0 0 8px;
+  line-height: 1.45;
+}

@@ -603,6 +603,7 @@ function App() {
   const [selectedTargetId, setSelectedTargetId] = useState('')
   const [showTableWindow, setShowTableWindow] = useState(false)
   const [showMarketplaceWindow, setShowMarketplaceWindow] = useState(false)
+  const [showRules, setShowRules] = useState(false)
   const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null)
   const [isRevealedCardDragged, setIsRevealedCardDragged] = useState(false)
   const [playingHandSortMode, setPlayingHandSortMode] = useState<PlayingHandSortMode>('suit')
@@ -2732,6 +2733,7 @@ function App() {
           <button disabled={!roomCode} onClick={startGame}>
             Pradeti zaidima
           </button>
+          <button type="button" onClick={() => setShowRules(true)}>Kaip zaisti</button>
           <button type="button" disabled={!roomCode} onClick={() => { void copyInviteLink() }}>
             {inviteCopied ? 'Nukopijuota!' : 'Kopijuoti kvietima'}
           </button>
@@ -2888,6 +2890,7 @@ function App() {
           <article className="tableWindow panel">
             <div className="tableWindowHeader">
               <h2>Stalo langas</h2>
+              <button onClick={() => setShowRules(true)}>Taisykles</button>
               <button onClick={() => setShowTableWindow(false)}>Uzdaryti</button>
             </div>
             {error ? <div className="tableInlineError">{error}</div> : null}
@@ -3341,6 +3344,29 @@ function App() {
                 </button>
               </div>
             ) : null}
+          </article>
+        </section>
+      ) : null}
+
+      {showRules ? (
+        <section className="resultsOverlay" role="dialog" aria-modal="true" aria-label="Zaidimo taisykles" onClick={() => setShowRules(false)}>
+          <article className="resultsDialog rulesDialog" onClick={(e) => e.stopPropagation()}>
+            <h2>Kaip zaisti Fasiola</h2>
+            <h3>Tikslas</h3>
+            <p>Kuo greiciau atsikratyti visu savo kortu. Paskutinis likes su kortomis pralaimi partija.</p>
+            <h3>1 dalis - dalybos</h3>
+            <p>Savo ejime trauki korta is centrines malkos ir atverti ja visiems. Atversta korta padedi sau arba kitam zaidejui pagal "+1" taisykle: korta turi buti vienu rangu aukstesne uz virsutine gavejo korta. Jei korta tinka kitam zaidejui - privalai padeti jam, o ne sau. Jei tavo virsutine korta tinka ant kito zaidejo virsutines - perkelk ja jam.</p>
+            <p>Kai malka baigiasi, paskutine atversta ne piku spalva tampa koziriu ir prasideda antra dalis.</p>
+            <h3>2 dalis - zaidimas</h3>
+            <p>Pradeda zaidejas, turintis piku 9. Ant stalo korta dengiama aukstesne tos pacios spalvos korta arba koziriu. Pikai dengiami tik aukstesniais pikais. Jei padengti negali - imi seniausia (apatine) korta nuo stalo.</p>
+            <p>Kai ant stalo susikaupia tiek kortu, kiek yra zaideju, stalas nusivalo ir padejes paskutine korta pradeda is naujo. Atsikrates visu kortu - baigei partija.</p>
+            <h3>Fasiolas</h3>
+            <p>Jei dalybu metu zaidejas padaro klaida (padeda korta sau, nors privalejo kitam, arba padeda ne pagal "+1"), kiti gali paspausti "Fasiolas!". Jei kaltinimas teisingas, visi kiti zaidejai atiduoda klaida padariusiam po viena ne virsutine savo korta - jo krova isauga.</p>
+            <h3>Taskai</h3>
+            <p>Registracija: +250 tasku. Kiekvienas suzaistas match: +200 visiems. Vietos bonusai: 1 vieta +200, 2 vieta +100, 3 vieta +50. Uz taskus Marketplace atrakinsi avatarus, kortu nugareles, stalus ir profilio korteles.</p>
+            <div className="resultsActions">
+              <button type="button" onClick={() => setShowRules(false)}>Uzdaryti</button>
+            </div>
           </article>
         </section>
       ) : null}
