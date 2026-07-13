@@ -32,6 +32,7 @@ import {
   type TurnAction,
 } from '../../shared/src/types'
 import './App.css'
+import * as sfx from './sfx'
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 const PROFILE_SLOTS_STORAGE_KEY = 'fasiolas:profile-slots'
@@ -604,6 +605,7 @@ function App() {
   const [showTableWindow, setShowTableWindow] = useState(false)
   const [showMarketplaceWindow, setShowMarketplaceWindow] = useState(false)
   const [showRules, setShowRules] = useState(false)
+  const [soundMuted, setSoundMuted] = useState(sfx.isMuted)
   const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null)
   const [isRevealedCardDragged, setIsRevealedCardDragged] = useState(false)
   const [playingHandSortMode, setPlayingHandSortMode] = useState<PlayingHandSortMode>('suit')
@@ -897,6 +899,8 @@ function App() {
     if (gamePhase !== 'FINISHED') {
       return
     }
+    const won = payload?.state.matchRewards?.find((entry) => entry.playerId === payload.yourPlayerId)?.won
+    sfx.play(won ? 'win' : 'lose')
     const timer = window.setTimeout(() => {
       void refreshAccountFromAuth()
       // Isvalom korteliu info cache, kad apvertus matytusi nauja statistika.
@@ -1114,11 +1118,27 @@ function App() {
   useEffect(() => {
     const phase = payload?.state.phase
     const inGame = phase === 'DEALING' || phase === 'PLAYING'
-    if (isMyTurn && inGame && !wasMyTurnRef.current && 'vibrate' in navigator) {
-      navigator.vibrate([200, 90, 200])
+    if (isMyTurn && inGame && !wasMyTurnRef.current) {
+      if ('vibrate' in navigator) {
+        navigator.vibrate([200, 90, 200])
+      }
+      sfx.play('yourTurn')
     }
     wasMyTurnRef.current = isMyTurn
   }, [isMyTurn, payload?.state.phase])
+
+  // Garsai: fasiolas aktyvavimas ir rysio dingimas.
+  const fasiolasActive = Boolean(payload?.state.pendingFasiolas)
+  useEffect(() => {
+    if (fasiolasActive) {
+      sfx.play('fasiolas')
+    }
+  }, [fasiolasActive])
+  useEffect(() => {
+    if (connectionStatus === 'reconnecting') {
+      sfx.play('warning')
+    }
+  }, [connectionStatus])
 
   const profilePanelProfile = useMemo(
     () => me?.profile ?? withSlot(profileDraft, activeProfileSlot),
@@ -1530,6 +1550,7 @@ function App() {
   }
 
   function sendAction(action: TurnAction): void {
+    sfx.play(action.type === 'DRAW_REVEAL' ? 'cardFlip' : 'cardPlace')
     emitAck('take_turn_action', { action })
   }
 
@@ -1698,6 +1719,7 @@ function App() {
     if (!info.card) {
       return
     }
+    sfx.play(info.actionType === 'DRAW_REVEAL' ? 'cardFlip' : 'cardPlace')
 
     const centerArea = centerDropRef.current
     const seatOf = (id: string | null): HTMLElement | null => (id ? tableSeatRefs.current.get(id) ?? null : null)
@@ -2734,6 +2756,15 @@ function App() {
             Pradeti zaidima
           </button>
           <button type="button" onClick={() => setShowRules(true)}>Kaip zaisti</button>
+          <button
+            type="button"
+            onClick={() => {
+              sfx.setMuted(!soundMuted)
+              setSoundMuted(!soundMuted)
+            }}
+          >
+            {soundMuted ? 'Garsai: isjungti' : 'Garsai: ijungti'}
+          </button>
           <button type="button" disabled={!roomCode} onClick={() => { void copyInviteLink() }}>
             {inviteCopied ? 'Nukopijuota!' : 'Kopijuoti kvietima'}
           </button>
@@ -2890,6 +2921,14 @@ function App() {
           <article className="tableWindow panel">
             <div className="tableWindowHeader">
               <h2>Stalo langas</h2>
+              <button
+                onClick={() => {
+                  sfx.setMuted(!soundMuted)
+                  setSoundMuted(!soundMuted)
+                }}
+              >
+                {soundMuted ? 'Be garso' : 'Garsas'}
+              </button>
               <button onClick={() => setShowRules(true)}>Taisykles</button>
               <button onClick={() => setShowTableWindow(false)}>Uzdaryti</button>
             </div>
