@@ -3094,6 +3094,23 @@ body:has(.tableWindowOverlay) {
   margin: 0;
 }
 
+.tableScaleControls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tableScaleControls button {
+  padding: 4px 10px;
+  line-height: 1;
+}
+
+.tableScaleValue {
+  min-width: 3.4em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .tableInlineError {
   margin-top: -2px;
   color: #8f1a1a;
@@ -3110,6 +3127,12 @@ body:has(.tableWindowOverlay) {
   border: 1px solid #4b6c82;
   background: radial-gradient(circle at center, #1f6272 0%, #153f4c 58%, #112c37 100%);
   overflow: hidden;
+}
+
+.roundTableStage {
+  position: absolute;
+  inset: 0;
+  transform-origin: center center;
 }
 
 .fasiolasDock {

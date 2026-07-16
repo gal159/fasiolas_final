@@ -39,6 +39,10 @@ const PROFILE_SLOTS_STORAGE_KEY = 'fasiolas:profile-slots'
 const LOGIN_SESSION_STORAGE_KEY = 'fasiolas:logged-in'
 const AUTH_USER_ID_STORAGE_KEY = 'fasiolas:auth-user-id'
 const RESET_TOKEN_QUERY_KEY = 'resetToken'
+const TABLE_SCALE_STORAGE_KEY = 'fasiolas:table-scale'
+const TABLE_SCALE_MIN = 0.75
+const TABLE_SCALE_MAX = 1.4
+const TABLE_SCALE_STEP = 0.1
 
 const AVATAR_LABELS: Record<PlayerProfile['avatarId'], string> = {
   zeus: 'Dzeusas',
@@ -223,6 +227,15 @@ function playerStorageKey(roomCode: string): string {
 function getStoredAuthUserId(): string | undefined {
   const value = sessionStorage.getItem(AUTH_USER_ID_STORAGE_KEY)?.trim()
   return value ? value : undefined
+}
+
+function clampTableScale(value: number): number {
+  return Math.min(TABLE_SCALE_MAX, Math.max(TABLE_SCALE_MIN, value))
+}
+
+function getStoredTableScale(): number {
+  const raw = Number(localStorage.getItem(TABLE_SCALE_STORAGE_KEY))
+  return Number.isFinite(raw) && raw > 0 ? clampTableScale(raw) : 1
 }
 
 function isUuid(value: string): boolean {
@@ -606,6 +619,7 @@ function App() {
   const [showMarketplaceWindow, setShowMarketplaceWindow] = useState(false)
   const [showRules, setShowRules] = useState(false)
   const [soundMuted, setSoundMuted] = useState(sfx.isMuted)
+  const [tableScale, setTableScale] = useState(() => getStoredTableScale())
   const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null)
   const [isRevealedCardDragged, setIsRevealedCardDragged] = useState(false)
   const [playingHandSortMode, setPlayingHandSortMode] = useState<PlayingHandSortMode>('suit')
@@ -803,6 +817,10 @@ function App() {
   useEffect(() => {
     sessionStorage.setItem(PROFILE_SLOTS_STORAGE_KEY, JSON.stringify(profileSlots))
   }, [profileSlots])
+
+  useEffect(() => {
+    localStorage.setItem(TABLE_SCALE_STORAGE_KEY, String(tableScale))
+  }, [tableScale])
 
   useEffect(() => {
     if (!flippedBadgeId) return
@@ -2920,6 +2938,25 @@ function App() {
         <section className="tableWindowOverlay">
           <article className="tableWindow panel">
             <div className="tableWindowHeader">
+              <div className="tableScaleControls" aria-label="Stalo dydis">
+                <button
+                  type="button"
+                  onClick={() => setTableScale((prev) => Math.round(clampTableScale(prev - TABLE_SCALE_STEP) * 100) / 100)}
+                  disabled={tableScale <= TABLE_SCALE_MIN}
+                  title="Sumazinti stalo mastele"
+                >
+                  -
+                </button>
+                <span className="tableScaleValue">{Math.round(tableScale * 100)}%</span>
+                <button
+                  type="button"
+                  onClick={() => setTableScale((prev) => Math.round(clampTableScale(prev + TABLE_SCALE_STEP) * 100) / 100)}
+                  disabled={tableScale >= TABLE_SCALE_MAX}
+                  title="Padidinti stalo mastele"
+                >
+                  +
+                </button>
+              </div>
               <h2>Stalo langas</h2>
               <button
                 onClick={() => {
@@ -2935,6 +2972,7 @@ function App() {
             {error ? <div className="tableInlineError">{error}</div> : null}
 
             <div className={`roundTableArea table-${me?.profile.tableId ?? 'common_green'}`}>
+              <div className="roundTableStage" style={{ transform: `scale(${tableScale})` }}>
               {payload.state.phase === 'DEALING' ? (
                 <div className="fasiolasDock">
                   <strong>Fasiolas</strong>
@@ -3088,38 +3126,6 @@ function App() {
                 ) : null}
               </div>
 
-              {flyingPlayedCard ? (
-                <div
-                  className="flyingPlayedCard"
-                  style={{
-                    '--fly-from-x': `${flyingPlayedCard.fromX}px`,
-                    '--fly-from-y': `${flyingPlayedCard.fromY}px`,
-                    '--fly-to-x': `${flyingPlayedCard.toX}px`,
-                    '--fly-to-y': `${flyingPlayedCard.toY}px`,
-                    '--fly-width': `${flyingPlayedCard.width}px`,
-                    '--fly-height': `${flyingPlayedCard.height}px`,
-                  } as CSSProperties}
-                >
-                  {renderVisualCard(flyingPlayedCard.card, true)}
-                </div>
-              ) : null}
-
-              {flyingRevealedCard ? (
-                <div
-                  className="flyingRevealedCard"
-                  style={{
-                    '--fly-from-x': `${flyingRevealedCard.fromX}px`,
-                    '--fly-from-y': `${flyingRevealedCard.fromY}px`,
-                    '--fly-to-x': `${flyingRevealedCard.toX}px`,
-                    '--fly-to-y': `${flyingRevealedCard.toY}px`,
-                    '--fly-width': `${flyingRevealedCard.width}px`,
-                    '--fly-height': `${flyingRevealedCard.height}px`,
-                  } as CSSProperties}
-                >
-                  {renderVisualCard(flyingRevealedCard.card)}
-                </div>
-              ) : null}
-
               {tableSeats.map((seat) => (
                 <div
                   key={seat.id}
@@ -3188,6 +3194,39 @@ function App() {
                   <span>Kortos: {seat.cardCount}{seat.disconnected ? ' (atsijunge)' : ''}</span>
                 </div>
               ))}
+              </div>
+
+              {flyingPlayedCard ? (
+                <div
+                  className="flyingPlayedCard"
+                  style={{
+                    '--fly-from-x': `${flyingPlayedCard.fromX}px`,
+                    '--fly-from-y': `${flyingPlayedCard.fromY}px`,
+                    '--fly-to-x': `${flyingPlayedCard.toX}px`,
+                    '--fly-to-y': `${flyingPlayedCard.toY}px`,
+                    '--fly-width': `${flyingPlayedCard.width}px`,
+                    '--fly-height': `${flyingPlayedCard.height}px`,
+                  } as CSSProperties}
+                >
+                  {renderVisualCard(flyingPlayedCard.card, true)}
+                </div>
+              ) : null}
+
+              {flyingRevealedCard ? (
+                <div
+                  className="flyingRevealedCard"
+                  style={{
+                    '--fly-from-x': `${flyingRevealedCard.fromX}px`,
+                    '--fly-from-y': `${flyingRevealedCard.fromY}px`,
+                    '--fly-to-x': `${flyingRevealedCard.toX}px`,
+                    '--fly-to-y': `${flyingRevealedCard.toY}px`,
+                    '--fly-width': `${flyingRevealedCard.width}px`,
+                    '--fly-height': `${flyingRevealedCard.height}px`,
+                  } as CSSProperties}
+                >
+                  {renderVisualCard(flyingRevealedCard.card)}
+                </div>
+              ) : null}
             </div>
           </article>
         </section>
