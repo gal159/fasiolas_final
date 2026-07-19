@@ -1273,7 +1273,14 @@ function App() {
       0,
     )
     const fullRadius = getRingRadiusPercent(total)
-    const radius = isNarrowViewport ? { x: Math.min(fullRadius.x, 33), y: fullRadius.y } : fullRadius
+    const baseRadius = isNarrowViewport ? { x: Math.min(fullRadius.x, 33), y: fullRadius.y } : fullRadius
+    // Sumazinus mastele ("-"), zaidejai turi issiskirstyti arciau kraštu, kad
+    // korteles nebesidengtu - kompensuojam mazesni korteliu dydi didesniu spinduliu.
+    const spreadFactor = tableScale < 1 ? 1 + (1 - tableScale) * 0.6 : 1
+    const radius = {
+      x: Math.min(baseRadius.x * spreadFactor, 47),
+      y: Math.min(baseRadius.y * spreadFactor, 40),
+    }
 
     return players.map((p, absoluteIndex) => {
       const relativeIndex = (absoluteIndex - meIndex + total) % total
@@ -1291,7 +1298,7 @@ function App() {
         disconnected: p.connected === false && !p.isBot,
       }
     })
-  }, [payload, isNarrowViewport])
+  }, [payload, isNarrowViewport, tableScale])
 
   const finalStandings = useMemo(() => {
     if (!payload || payload.state.phase !== 'FINISHED') {
@@ -2972,7 +2979,7 @@ function App() {
             {error ? <div className="tableInlineError">{error}</div> : null}
 
             <div className={`roundTableArea table-${me?.profile.tableId ?? 'common_green'}`}>
-              <div className="roundTableStage" style={{ transform: `scale(${tableScale})` }}>
+              <div className="roundTableStage" style={{ '--table-scale': tableScale } as CSSProperties}>
               {payload.state.phase === 'DEALING' ? (
                 <div className="fasiolasDock">
                   <strong>Fasiolas</strong>

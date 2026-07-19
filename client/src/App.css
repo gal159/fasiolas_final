@@ -3132,7 +3132,6 @@ body:has(.tableWindowOverlay) {
 .roundTableStage {
   position: absolute;
   inset: 0;
-  transform-origin: center center;
 }
 
 .fasiolasDock {
@@ -3140,6 +3139,8 @@ body:has(.tableWindowOverlay) {
   top: 14px;
   right: 14px;
   z-index: 6;
+  transform: scale(var(--table-scale, 1));
+  transform-origin: top right;
   display: grid;
   gap: 6px;
   justify-items: end;
@@ -3161,7 +3162,8 @@ body:has(.tableWindowOverlay) {
   position: absolute;
   left: 50%;
   bottom: 14px;
-  transform: translateX(-50%);
+  transform: translateX(-50%) scale(var(--table-scale, 1));
+  transform-origin: center bottom;
   z-index: 8;
   display: grid;
   gap: 6px;
@@ -3232,7 +3234,8 @@ body:has(.tableWindowOverlay) {
   position: absolute;
   left: 50%;
   bottom: 14px;
-  transform: translateX(-50%);
+  transform: translateX(-50%) scale(var(--table-scale, 1));
+  transform-origin: center bottom;
   z-index: 8;
   display: grid;
   gap: 8px;
@@ -3249,7 +3252,8 @@ body:has(.tableWindowOverlay) {
   position: absolute;
   left: 14px;
   top: 50%;
-  transform: translateY(-50%);
+  transform: translateY(-50%) scale(var(--table-scale, 1));
+  transform-origin: left center;
   display: grid;
   justify-items: center;
   gap: 2px;
@@ -3332,7 +3336,7 @@ body:has(.tableWindowOverlay) {
   position: absolute;
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(var(--table-scale, 1));
   width: auto;
   aspect-ratio: auto;
   border-radius: 0;
@@ -3498,7 +3502,7 @@ body:has(.tableWindowOverlay) {
 
 .tableSeat {
   position: absolute;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(var(--table-scale, 1));
   width: min(246px, 44vw);
   border-radius: 0;
   border: 0;
@@ -3520,7 +3524,7 @@ body:has(.tableWindowOverlay) {
    Seat centruotas, tad papildoma eilute augina virsu - kompensuojam zemyn,
    kad uzrasas nebutu nukirptas stalo zonos virsuje. */
 .tableSeat:not(.me) {
-  transform: translate(-50%, calc(-50% + 36px));
+  transform: translate(-50%, calc(-50% + 36px)) scale(var(--table-scale, 1));
 }
 
 .tableSeat:not(.me) > span {
@@ -3531,8 +3535,10 @@ body:has(.tableWindowOverlay) {
 .tableSeat.me {
   border: 0;
   background: transparent;
-  /* Sava vieta rišama prie apacios, kad niekada nebutu nukerpama. */
-  transform: translate(-50%, -100%);
+  /* Sava vieta rišama prie apacios, kad niekada nebutu nukerpama. Scale
+     origin - apacia, kitaip mastelis nutrauktu koto siejima nuo 99% linijos. */
+  transform: translate(-50%, -100%) scale(var(--table-scale, 1));
+  transform-origin: center bottom;
 }
 
 .tableSeat.dropTarget {
