@@ -8871,3 +8871,11 @@ header.profileOnboardingHeader {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* Be panelio remelio: turinys tiesiai ant fono kaip makete */
+.page.mainMenuPage > .panel {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 10px;
+}
