@@ -8879,3 +8879,135 @@ header.profileOnboardingHeader {
   box-shadow: none !important;
   padding: 0 10px;
 }
+
+/* Kambario blokas pagal maketa: tamsus panelis, labelai virs lauku, plyteliu mygtukai */
+.roomPanel {
+  background: linear-gradient(180deg, rgba(24, 16, 12, 0.82), rgba(14, 9, 7, 0.88));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 20px 22px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.menuMainCol .row.fieldCol {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.page.mainMenuPage .row.fieldCol label {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #e8b34b !important;
+  padding-left: 2px;
+  text-shadow: none;
+}
+.page.mainMenuPage .row.fieldCol label small {
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  color: rgba(232, 179, 75, 0.65);
+}
+.fieldInputWrap {
+  position: relative;
+  display: flex;
+}
+.fieldPrefix {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+}
+.fieldInputWrap input {
+  flex: 1;
+  padding-left: 44px !important;
+}
+.page.mainMenuPage .fieldInputWrap input {
+  background: rgba(10, 7, 5, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 12px;
+  color: #f3ede2 !important;
+}
+.page.mainMenuPage .fieldInputWrap input::placeholder {
+  color: rgba(243, 237, 226, 0.4);
+}
+.menuTile::before {
+  display: none;
+}
+.menuActionsGrid .menuTile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 18px 12px;
+  border-radius: 14px;
+  font-size: 16px;
+  color: #f3ede2 !important;
+  text-shadow: none;
+  background: rgba(20, 14, 22, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+.menuActionsGrid .menuTile:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+.tileIcon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  font-size: 22px;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.08);
+}
+.menuTile.tilePurple {
+  border-color: rgba(192, 91, 255, 0.45) !important;
+  background: linear-gradient(180deg, rgba(60, 25, 75, 0.55), rgba(25, 12, 32, 0.8)) !important;
+}
+.menuTile.tilePurple .tileIcon { color: #d886ff; background: rgba(192, 91, 255, 0.18); }
+.menuTile.tileGreen {
+  border-color: rgba(64, 200, 120, 0.45) !important;
+  background: linear-gradient(180deg, rgba(20, 60, 38, 0.55), rgba(10, 28, 18, 0.8)) !important;
+}
+.menuTile.tileGreen .tileIcon { color: #5eeaa0; background: rgba(64, 200, 120, 0.18); }
+.menuTile.tilePink {
+  border-color: rgba(230, 90, 200, 0.45) !important;
+  background: linear-gradient(180deg, rgba(70, 25, 60, 0.55), rgba(30, 12, 26, 0.8)) !important;
+}
+.menuTile.tilePink .tileIcon { color: #f48ae0; background: rgba(230, 90, 200, 0.18); }
+.menuTile.tileIndigo {
+  border-color: rgba(120, 110, 255, 0.45) !important;
+  background: linear-gradient(180deg, rgba(35, 30, 85, 0.55), rgba(16, 14, 38, 0.8)) !important;
+}
+.menuTile.tileIndigo .tileIcon { color: #a49bff; background: rgba(120, 110, 255, 0.18); }
+
+/* Fasiolas/999 juosta tamsi su zaliu svytejimu kaip makete */
+.menuMainCol .gameSwitch {
+  background: linear-gradient(180deg, rgba(18, 26, 18, 0.85), rgba(8, 12, 8, 0.9)) !important;
+  border: 1px solid rgba(64, 200, 120, 0.5) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 18px rgba(64, 200, 120, 0.25) !important;
+}
+.menuMainCol .gameSwitch:hover {
+  background: linear-gradient(180deg, rgba(24, 34, 24, 0.85), rgba(10, 16, 10, 0.9)) !important;
+}
+
+/* Statistikos juosta tamsi */
+.page.mainMenuPage .menuStatsBar {
+  background: linear-gradient(180deg, rgba(24, 16, 12, 0.82), rgba(14, 9, 7, 0.88)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  box-shadow: none;
+}
+.page.mainMenuPage .menuStatsBar .profileQuickInfo,
+.page.mainMenuPage .menuStatsBar strong,
+.page.mainMenuPage .menuStatsBar span {
+  color: #f3ede2;
+}

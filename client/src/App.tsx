@@ -2882,38 +2882,55 @@ function App() {
           </aside>
 
           <div className="menuMainCol">
-            <div className="row">
-              <label htmlFor="room">Kambarys</label>
-              <input
-                id="room"
-                value={roomCodeInput}
-                onChange={(event) => setRoomCodeInput(event.target.value.toUpperCase())}
-                placeholder="Kodas"
-              />
-            </div>
-            <div className="row">
-              <label htmlFor="room-password">Slaptazodis</label>
-              <input
-                id="room-password"
-                value={roomPasswordInput}
-                onChange={(event) => setRoomPasswordInput(event.target.value)}
-                placeholder="Kambario slaptazodis (nebutina)"
-              />
-            </div>
-            <div className="actions menuActionsGrid">
-              <button onClick={createRoom}>Sukurti kambari</button>
-              <button onClick={() => joinRoom()}>Prisijungti</button>
-              <button disabled={!roomCode} onClick={startGame}>
-                Pradeti zaidima
-              </button>
-              <button type="button" disabled={!roomCode} onClick={() => { void copyInviteLink() }}>
-                {inviteCopied ? 'Nukopijuota!' : 'Kopijuoti kvietima'}
-              </button>
-              {payload?.state.phase === 'LOBBY' ? (
-                <button type="button" onClick={() => emitAck('add_bot', {})}>
-                  Iskviesti bota
+            <div className="roomPanel">
+              <div className="row fieldCol">
+                <label htmlFor="room">Kambarys</label>
+                <div className="fieldInputWrap">
+                  <span className="fieldPrefix" aria-hidden="true">#</span>
+                  <input
+                    id="room"
+                    value={roomCodeInput}
+                    onChange={(event) => setRoomCodeInput(event.target.value.toUpperCase())}
+                    placeholder="Kodas"
+                  />
+                </div>
+              </div>
+              <div className="row fieldCol">
+                <label htmlFor="room-password">Slaptazodis <small>(nebutina)</small></label>
+                <div className="fieldInputWrap">
+                  <span className="fieldPrefix" aria-hidden="true">&#128274;</span>
+                  <input
+                    id="room-password"
+                    value={roomPasswordInput}
+                    onChange={(event) => setRoomPasswordInput(event.target.value)}
+                    placeholder="Kambario slaptazodis (nebutina)"
+                  />
+                </div>
+              </div>
+              <div className="actions menuActionsGrid">
+                <button className="menuTile tilePurple" onClick={createRoom}>
+                  <span className="tileIcon" aria-hidden="true">+</span>
+                  Sukurti kambari
                 </button>
-              ) : null}
+                <button className="menuTile tileGreen" onClick={() => joinRoom()}>
+                  <span className="tileIcon" aria-hidden="true">&#8614;</span>
+                  Prisijungti
+                </button>
+                <button className="menuTile tilePink" disabled={!roomCode} onClick={startGame}>
+                  <span className="tileIcon" aria-hidden="true">&#9654;</span>
+                  Pradeti zaidima
+                </button>
+                <button className="menuTile tileIndigo" type="button" disabled={!roomCode} onClick={() => { void copyInviteLink() }}>
+                  <span className="tileIcon" aria-hidden="true">&#128279;</span>
+                  {inviteCopied ? 'Nukopijuota!' : 'Kopijuoti kvietima'}
+                </button>
+                {payload?.state.phase === 'LOBBY' ? (
+                  <button className="menuTile tileGreen" type="button" onClick={() => emitAck('add_bot', {})}>
+                    <span className="tileIcon" aria-hidden="true">&#129302;</span>
+                    Iskviesti bota
+                  </button>
+                ) : null}
+              </div>
             </div>
 
             <div className="gameTypeSwitchRow">
