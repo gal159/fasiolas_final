@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "typography": {
+      "source": "petekp/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/typography/SKILL.md",
+      "computedHash": "3292d34592e7224b7fe1e47c4aa7bc6ff3ca7fdcc62d6c493e1a23c903779879"
+    }
+  }
+}
