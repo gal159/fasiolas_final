@@ -9,6 +9,13 @@ export interface Card {
 
 export type GamePhase = "LOBBY" | "DEALING" | "PLAYING" | "FINISHED";
 
+// Zaidimo tipas: "fasiolas" - originalus zaidimas, "nnn" - "999" (Shithead stiliaus).
+export type GameType = "fasiolas" | "nnn";
+
+// 999: magiskos kortos. 2 - limpa ant visko ir zaidejas deda dar; 3 - rodoma
+// zaidejui (niekada nededama i kruva); 10 - sudegina kruva ir zaidejas eina dar.
+export const NNN_MAGIC_RANKS: Rank[] = ["2", "3", "10"];
+
 export const PROFILE_COLOR_OPTIONS = [
   "#ff2f92",
   "#338bff",
@@ -195,6 +202,9 @@ export interface PublicPlayerState {
   isBot: boolean;
   // Nebutinas (senu klientu suderinamumas): false = zaidejas atsijunges.
   connected?: boolean;
+  // 999: atverstos kortos (mato visi) ir aklu (uzverstu) kortu skaicius.
+  faceUpCards?: Card[];
+  blindCount?: number;
 }
 
 export interface MatchRewardEntry {
@@ -219,12 +229,26 @@ export interface PublicTableState {
   finalRankingPlayerIds: string[];
   pendingFasiolas: PendingFasiolasState | null;
   matchRewards: MatchRewardEntry[] | null;
+  // Nebutini (senu klientu suderinamumas). gameType nesant laikoma "fasiolas".
+  gameType?: GameType;
+  // 999: is zaidimo isbrauktu kortu skaicius (sudegintos 10 + panaudoti trejetai).
+  discardedCount?: number;
+  // 999: laukiama taikinio atsakymo i parodyta trejeta.
+  pendingThree?: PendingThreeState | null;
 }
 
 export interface PendingFasiolasState {
   accusedPlayerId: string;
   requiredFromPlayerIds: string[];
   contributedFromPlayerIds: string[];
+}
+
+// 999: parodytas trejetas laukia taikinio atsakymo (paimti kruva ar atsimusti).
+export interface PendingThreeState {
+  showerPlayerId: string;
+  targetPlayerId: string;
+  card: Card;
+  targetCanDefend: boolean;
 }
 
 export type DealingAction =
@@ -252,7 +276,26 @@ export type PlayingAction =
       type: "TAKE_OLDEST";
     };
 
-export type TurnAction = DealingAction | PlayingAction;
+// 999 veiksmai. PLAY_CARDS leidzia kelias tos pacios vertes kortas vienu metu.
+export type NnnAction =
+  | {
+      type: "PLAY_CARDS";
+      cardIndexes: number[];
+    }
+  | {
+      type: "SHOW_THREE";
+      cardIndex: number;
+      targetPlayerId: string;
+    }
+  | {
+      type: "TAKE_PILE";
+    }
+  | {
+      type: "PLAY_BLIND";
+      blindIndex: number;
+    };
+
+export type TurnAction = DealingAction | PlayingAction | NnnAction;
 
 // Transliuojama kitiems kambario zaidejams, kad jie matytu kortos skridimo animacija.
 export interface ActionAnimatedEvent {

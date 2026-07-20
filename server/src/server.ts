@@ -613,6 +613,8 @@ const createRoomSchema = z.object({
   authUserId: z.string().trim().regex(AUTH_USER_ID_REGEX).optional(),
   profile: profileSchema.optional(),
   password: z.string().trim().max(32).optional(),
+  // Seni klientai lauko nesiuncia - jiems visada fasiolas.
+  gameType: z.enum(["fasiolas", "nnn"]).optional().default("fasiolas"),
 });
 
 const joinRoomSchema = z.object({
@@ -856,6 +858,7 @@ io.on("connection", (socket) => {
             authUserId: resolvedAuthUser?.id ?? parsed.authUserId ?? null,
             registeredAt: resolvedAuthUser?.createdAt,
             password: parsed.password ?? null,
+            gameType: parsed.gameType,
           });
           socket.data.roomCode = roomCode;
           socket.data.playerId = playerId;
@@ -1010,6 +1013,20 @@ io.on("connection", (socket) => {
       const roomCode = socket.data.roomCode as string;
       const playerId = socket.data.playerId as string;
       engine.resolveFasiolasContribution(roomCode, playerId, cardIndex);
+      emitRoomState(roomCode);
+      engine.kickBots(roomCode);
+      ack?.({ ok: true });
+    } catch (error) {
+      ack?.({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  // 999: taikinio atsakymas i parodyta trejeta (paimti kruva arba atsimusti).
+  socket.on("respond_three", ({ defend }: { defend: boolean }, ack) => {
+    try {
+      const roomCode = socket.data.roomCode as string;
+      const playerId = socket.data.playerId as string;
+      engine.resolveThreeResponse(roomCode, playerId, Boolean(defend));
       emitRoomState(roomCode);
       engine.kickBots(roomCode);
       ack?.({ ok: true });

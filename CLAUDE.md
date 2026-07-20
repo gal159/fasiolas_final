@@ -1,6 +1,6 @@
 # Fasiolas — gairės Claude Code
 
-Realaus laiko daugelio žaidėjų kortų žaidimas. Monorepo: `client` (React + Vite),
+Realaus laiko daugelio žaidėjų kortų žaidimai (Fasiolas ir "999"). Monorepo: `client` (React + Vite),
 `server` (Express + Socket.IO), `shared` (bendri tipai). Deploy: Vercel (client)
 + Render (server) + Neon Postgres (produkcijos DB). Vartotojas bendrauja lietuviškai.
 
@@ -45,6 +45,23 @@ fazeje bandyk PLAY_CARD 0..n, fallback TAKE_OLDEST).
   i auth DB.
 - `shared/src/types.ts` — OPTIONS/RARITY/PRICES konstantos ir tipai. Nauja
   kosmetika PRADEDAMA cia.
+
+## Žaidimo tipai (gameType)
+
+- Kambarys turi `gameType: "fasiolas" | "nnn"` ("nnn" = 999, Shithead stiliaus).
+  Pasirenkamas jungikliu hub'e (`gameSwitch`), keliauja `create_room` payload'u
+  (zod default `"fasiolas"` senu klientu suderinamumui) -> `GameRoom.gameType` ->
+  `LobbySummary`/`PublicTableState`.
+- 999 praleidzia DEALING faze (dalinimas 3 aklos + 3 atverstos + 3 i ranka vyksta
+  `startNnnGame` viduje, iskart PLAYING). Max 5 zaidejai (`maxPlayersFor`).
+- 999 busena variklyje: `discardPile`, `pendingThree` (parodyto trejeto laukimas,
+  atsakymas per atskira socket eventa `respond_three`, ne TurnAction — atsako ne
+  ejimo savininkas), `lastChampionPlayerId` (islieka per rematch, cempionas pradeda).
+- KRITISKA: `getClientState` nnn kambariams siuncia `topCard: null` — rankos
+  slaptos. 7 apribojimas isvedamas is kruvos virsaus (jokio flag'o). Ejimu
+  praleidimas pagal `nnnTotalCards` (ranka+atverstos+aklos), ne pagal ranka.
+- Variklio simuliacija: `npx tsx scripts/test-nnn-engine.ts` (200 partiju su
+  botais iki FINISHED + kortu apskaitos invariantas 52).
 
 ## Kaip pridėti naują kosmetikos tipą (patikrintas receptas)
 

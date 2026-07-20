@@ -8,11 +8,14 @@ import type {
   ClientStatePayload,
   DealingAction,
   EffectId,
+  GameType,
   HatId,
+  NnnAction,
   PlayerAccountState,
   PlayerCardInfo,
   PlayerUnlocks,
   PendingFasiolasState,
+  PendingThreeState,
   PlayerProfile,
   ProfileColor,
   ProfileSlot,
@@ -51,6 +54,9 @@ type InternalPlayer = {
   id: string;
   name: string;
   cards: Card[];
+  // 999: atverstos (visiems matomos) ir aklos (uzverstos) kortos.
+  faceUpCards: Card[];
+  blindCards: Card[];
   socketId: string;
   authUserId: string | null;
   profile: PlayerProfile;
@@ -73,6 +79,7 @@ type LastActionRecord = {
 
 type GameRoom = {
   code: string;
+  gameType: GameType;
   players: InternalPlayer[];
   phase: PublicTableState["phase"];
   centerDeck: Card[];
@@ -91,6 +98,10 @@ type GameRoom = {
   matchRewards: MatchRewardRecord[] | null;
   password: string | null;
   lastActivityAt: number;
+  // 999 laukai: isbrauktos kortos, laukiantis trejetas, praejusio maco cempionas.
+  discardPile: Card[];
+  pendingThree: PendingThreeState | null;
+  lastChampionPlayerId: string | null;
 };
 
 export type LobbySummary = {
@@ -98,6 +109,7 @@ export type LobbySummary = {
   hostName: string;
   playerCount: number;
   hasPassword: boolean;
+  gameType: GameType;
 };
 
 const SUITS: Suit[] = ["S", "H", "D", "C"];
@@ -270,6 +282,38 @@ function isHigherSameSuit(base: Card, candidate: Card): boolean {
   return base.suit === candidate.suit && RANK_ORDER[candidate.rank] > RANK_ORDER[base.rank];
 }
 
+// ---------------------------------------------------------------------------
+// 999 taisykliu helperiai. 7 apribojimas isvedamas vien is kruvos virsaus:
+// 7 gali buti virsuje tik ka tik padeta (visi kruvos valymo ivykiai ja istustina).
+// ---------------------------------------------------------------------------
+
+const NNN_MAX_PLAYERS = 5;
+const NNN_HAND_SIZE = 3;
+
+function isNnnMagic(rank: Rank): boolean {
+  return rank === "2" || rank === "3" || rank === "10";
+}
+
+function canPlayOnNnnPile(top: Card | null, rank: Rank): boolean {
+  if (rank === "3") {
+    return false;
+  }
+  if (rank === "2" || rank === "10") {
+    return true;
+  }
+  if (!top || top.rank === "2") {
+    return true;
+  }
+  if (top.rank === "7") {
+    return RANK_ORDER[rank] <= 7;
+  }
+  return RANK_ORDER[rank] >= RANK_ORDER[top.rank];
+}
+
+function nnnTotalCards(player: InternalPlayer): number {
+  return player.cards.length + player.faceUpCards.length + player.blindCards.length;
+}
+
 function canPlayOnTable(topTable: Card | null, candidate: Card, trumpSuit: Suit | null): boolean {
   if (!topTable) {
     return true;
@@ -351,6 +395,18 @@ export class GameEngine {
     if (action.type === "TAKE_OLDEST") {
       return { ...base, actionType: action.type, toPlayerId: null, card: room.tableStack[0] ?? null };
     }
+    if (action.type === "PLAY_CARDS") {
+      return { ...base, actionType: action.type, toPlayerId: null, card: actor.cards[action.cardIndexes[0]] ?? null };
+    }
+    if (action.type === "SHOW_THREE") {
+      return { ...base, actionType: action.type, toPlayerId: action.targetPlayerId, card: actor.cards[action.cardIndex] ?? null };
+    }
+    if (action.type === "TAKE_PILE") {
+      return { ...base, actionType: action.type, toPlayerId: null, card: room.tableStack[room.tableStack.length - 1] ?? null };
+    }
+    if (action.type === "PLAY_BLIND") {
+      return { ...base, actionType: action.type, toPlayerId: null, card: actor.blindCards[action.blindIndex] ?? null };
+    }
     return null;
   }
 
@@ -392,6 +448,10 @@ export class GameEngine {
           !pending.contributedFromPlayerIds.includes(p.id),
       );
     }
+    if (room.pendingThree) {
+      const target = room.players.find((p) => p.id === room.pendingThree?.targetPlayerId);
+      return Boolean(target?.isBot);
+    }
     const current = room.players.find((p) => p.id === room.currentTurnPlayerId);
     return Boolean(current?.isBot);
   }
@@ -418,9 +478,29 @@ export class GameEngine {
       return true;
     }
 
+    // 999: botas-taikinys atsako i parodyta trejeta (ginasi, jei turi 3).
+    if (room.pendingThree) {
+      const target = room.players.find((p) => p.id === room.pendingThree?.targetPlayerId);
+      if (!target || !target.isBot) {
+        return false;
+      }
+      const canDefend =
+        target.cards.some((c) => c.rank === "3") || target.faceUpCards.some((c) => c.rank === "3");
+      this.resolveThreeResponse(roomCode, target.id, canDefend);
+      return true;
+    }
+
     const bot = room.players.find((p) => p.id === room.currentTurnPlayerId);
     if (!bot || !bot.isBot) {
       return false;
+    }
+
+    if (room.gameType === "nnn") {
+      if (room.phase !== "PLAYING") {
+        return false;
+      }
+      this.applyTurnAction(roomCode, bot.id, this.decideBotNnnAction(room, bot));
+      return true;
     }
 
     if (room.phase === "DEALING") {
@@ -436,6 +516,55 @@ export class GameEngine {
     }
 
     return false;
+  }
+
+  // 999 boto strategija: zemiausia tinkama paprasta korta (visos kopijos),
+  // tada 2, tada 10, tada trejeto rodymas, galiausiai kruvos paemimas.
+  private decideBotNnnAction(room: GameRoom, bot: InternalPlayer): NnnAction {
+    if (bot.cards.length === 0 && bot.faceUpCards.length === 0 && bot.blindCards.length > 0) {
+      return { type: "PLAY_BLIND", blindIndex: 0 };
+    }
+
+    const top = room.tableStack[room.tableStack.length - 1] ?? null;
+    const byRank = new Map<Rank, number[]>();
+    bot.cards.forEach((card, index) => {
+      const list = byRank.get(card.rank) ?? [];
+      list.push(index);
+      byRank.set(card.rank, list);
+    });
+
+    let bestRank: Rank | null = null;
+    for (const rank of byRank.keys()) {
+      if (isNnnMagic(rank) || !canPlayOnNnnPile(top, rank)) {
+        continue;
+      }
+      if (bestRank === null || RANK_ORDER[rank] < RANK_ORDER[bestRank]) {
+        bestRank = rank;
+      }
+    }
+    if (bestRank !== null) {
+      return { type: "PLAY_CARDS", cardIndexes: byRank.get(bestRank) ?? [] };
+    }
+
+    const twoIndexes = byRank.get("2");
+    if (twoIndexes && twoIndexes.length > 0) {
+      return { type: "PLAY_CARDS", cardIndexes: [twoIndexes[0]] };
+    }
+    const tenIndexes = byRank.get("10");
+    if (tenIndexes && tenIndexes.length > 0) {
+      return { type: "PLAY_CARDS", cardIndexes: [tenIndexes[0]] };
+    }
+
+    const threeIndex = bot.cards.findIndex((c) => c.rank === "3");
+    if (threeIndex >= 0) {
+      const opponents = room.players.filter((p) => p.id !== bot.id && nnnTotalCards(p) > 0);
+      if (opponents.length > 0) {
+        const target = opponents.reduce((a, b) => (nnnTotalCards(b) > nnnTotalCards(a) ? b : a));
+        return { type: "SHOW_THREE", cardIndex: threeIndex, targetPlayerId: target.id };
+      }
+    }
+
+    return { type: "TAKE_PILE" };
   }
 
   private decideBotDealingAction(room: GameRoom, bot: InternalPlayer): DealingAction {
@@ -540,7 +669,7 @@ export class GameEngine {
     hostName: string,
     socketId: string,
     profile?: PlayerProfile,
-    options?: { authUserId?: string | null; registeredAt?: number; password?: string | null },
+    options?: { authUserId?: string | null; registeredAt?: number; password?: string | null; gameType?: GameType },
   ): { roomCode: string; playerId: string } {
     const roomCode = Math.random().toString(36).slice(2, 8).toUpperCase();
     const playerId = randomUUID();
@@ -548,11 +677,14 @@ export class GameEngine {
     this.ensureAccount(playerId, playerProfile, { registeredAt: options?.registeredAt });
     this.rooms.set(roomCode, {
       code: roomCode,
+      gameType: options?.gameType ?? "fasiolas",
       players: [
         {
           id: playerId,
           name: hostName,
           cards: [],
+          faceUpCards: [],
+          blindCards: [],
           socketId,
           authUserId: options?.authUserId ?? null,
           profile: playerProfile,
@@ -577,8 +709,15 @@ export class GameEngine {
       matchRewards: null,
       password: options?.password?.trim() || null,
       lastActivityAt: Date.now(),
+      discardPile: [],
+      pendingThree: null,
+      lastChampionPlayerId: null,
     });
     return { roomCode, playerId };
+  }
+
+  private maxPlayersFor(room: GameRoom): number {
+    return room.gameType === "nnn" ? NNN_MAX_PLAYERS : 8;
   }
 
   // Vieso lobby saraso santrauka: tik dar neprasideje kambariai.
@@ -594,6 +733,7 @@ export class GameEngine {
         hostName: host?.name ?? "?",
         playerCount: room.players.length,
         hasPassword: Boolean(room.password),
+        gameType: room.gameType,
       });
     }
     return lobbies;
@@ -607,7 +747,7 @@ export class GameEngine {
     options?: { authUserId?: string | null; registeredAt?: number; password?: string | null },
   ): { playerId: string } {
     const room = this.getRoomOrThrow(roomCode);
-    if (room.players.length >= 8) {
+    if (room.players.length >= this.maxPlayersFor(room)) {
       throw new Error("Room is full");
     }
     if (room.phase !== "LOBBY") {
@@ -623,6 +763,8 @@ export class GameEngine {
       id: playerId,
       name,
       cards: [],
+      faceUpCards: [],
+      blindCards: [],
       socketId,
       authUserId: options?.authUserId ?? null,
       profile: playerProfile,
@@ -634,7 +776,7 @@ export class GameEngine {
 
   public addBot(roomCode: string): { playerId: string } {
     const room = this.getRoomOrThrow(roomCode);
-    if (room.players.length >= 8) {
+    if (room.players.length >= this.maxPlayersFor(room)) {
       throw new Error("Room is full");
     }
     if (room.phase !== "LOBBY") {
@@ -656,6 +798,8 @@ export class GameEngine {
       id: playerId,
       name: botName,
       cards: [],
+      faceUpCards: [],
+      blindCards: [],
       socketId: `bot:${playerId}`,
       authUserId: null,
       profile: botProfile,
@@ -746,6 +890,10 @@ export class GameEngine {
     if (room.players.length < 2) {
       throw new Error("Need at least 2 players");
     }
+    if (room.gameType === "nnn") {
+      this.startNnnGame(room);
+      return;
+    }
     room.phase = "DEALING";
     room.centerDeck = createDeck();
     room.revealedDrawCard = null;
@@ -762,6 +910,8 @@ export class GameEngine {
 
     for (const p of room.players) {
       p.cards = [];
+      p.faceUpCards = [];
+      p.blindCards = [];
     }
 
     for (const p of room.players) {
@@ -775,11 +925,61 @@ export class GameEngine {
     room.currentTurnPlayerId = room.players[0]?.id ?? null;
   }
 
+  // 999 startas: DEALING faze praleidziama - iskart dalinama 3 aklos +
+  // 3 atverstos + 3 i ranka ir pereinama i PLAYING.
+  private startNnnGame(room: GameRoom): void {
+    room.phase = "PLAYING";
+    room.centerDeck = createDeck();
+    room.revealedDrawCard = null;
+    room.tableStack = [];
+    room.trumpSuit = null;
+    room.lastNonSpadeDrawnSuit = null;
+    room.winnerPlayerIds = [];
+    room.loserPlayerId = null;
+    room.finalRankingPlayerIds = [];
+    room.pendingFasiolas = null;
+    room.pendingFasiolasCards = new Map();
+    room.lastAction = null;
+    room.matchRewards = null;
+    room.discardPile = [];
+    room.pendingThree = null;
+    room.dealerLog = ["Prasidejo 999 zaidimas"];
+
+    for (const p of room.players) {
+      p.cards = [];
+      p.faceUpCards = [];
+      p.blindCards = [];
+    }
+    for (const p of room.players) {
+      for (let i = 0; i < NNN_HAND_SIZE; i += 1) {
+        const blind = room.centerDeck.pop();
+        if (blind) p.blindCards.push(blind);
+        const faceUp = room.centerDeck.pop();
+        if (faceUp) p.faceUpCards.push(faceUp);
+        const hand = room.centerDeck.pop();
+        if (hand) p.cards.push(hand);
+      }
+    }
+
+    const champion = room.lastChampionPlayerId
+      ? room.players.find((p) => p.id === room.lastChampionPlayerId)
+      : null;
+    const starter = champion ?? room.players[Math.floor(Math.random() * room.players.length)];
+    room.currentTurnPlayerId = starter?.id ?? null;
+    if (starter) {
+      room.dealerLog.push(champion ? `Pradeda cempionas ${starter.name}` : `Pradeda ${starter.name}`);
+    }
+  }
+
   public applyTurnAction(roomCode: string, actorPlayerId: string, action: TurnAction): void {
     const room = this.getRoomOrThrow(roomCode);
 
     if (room.pendingFasiolas) {
       throw new Error("Resolve fasiolas first");
+    }
+
+    if (room.pendingThree) {
+      throw new Error("Pirmiau turi buti atsakyta i parodyta trejeta");
     }
 
     if (room.currentTurnPlayerId !== actorPlayerId) {
@@ -788,7 +988,12 @@ export class GameEngine {
 
     const animationInfo = this.buildAnimationInfo(room, actorPlayerId, action);
 
-    if (room.phase === "DEALING") {
+    if (room.gameType === "nnn") {
+      if (room.phase !== "PLAYING") {
+        throw new Error("Game is not active");
+      }
+      this.applyNnnAction(room, actorPlayerId, action as NnnAction);
+    } else if (room.phase === "DEALING") {
       this.applyDealingAction(room, actorPlayerId, action as DealingAction);
       this.tryTransitionToPlaying(room);
     } else if (room.phase === "PLAYING") {
@@ -1051,6 +1256,12 @@ export class GameEngine {
       }
     }
 
+    if (room.pendingThree) {
+      this.reconcilePendingThree(room);
+    }
+
+    const isNnn = room.gameType === "nnn";
+
     return {
       yourPlayerId: viewer.id,
       yourHand: [...viewer.cards],
@@ -1063,10 +1274,13 @@ export class GameEngine {
           id: p.id,
           name: p.name,
           cardCount: p.cards.length,
-          topCard: p.cards[p.cards.length - 1] ?? null,
+          // 999: rankos kortos slaptos - virsutines NIEKADA nerodom.
+          topCard: isNnn ? null : (p.cards[p.cards.length - 1] ?? null),
           profile: p.profile,
           isBot: p.isBot,
           connected: p.connected,
+          faceUpCards: isNnn ? [...p.faceUpCards] : undefined,
+          blindCount: isNnn ? p.blindCards.length : undefined,
         })),
         centerDeckCount: room.centerDeck.length,
         revealedDrawCard: room.revealedDrawCard,
@@ -1080,8 +1294,31 @@ export class GameEngine {
         matchRewards: room.matchRewards
           ? room.matchRewards.map(({ playerId, placement, reward, won }) => ({ playerId, placement, reward, won }))
           : null,
+        gameType: room.gameType,
+        discardedCount: room.discardPile.length,
+        pendingThree: room.pendingThree,
       },
     };
+  }
+
+  // Apsauga: jei parodyto trejeto taikinys dingo is kambario, trejetas
+  // israsomas ir zaidimas testesi (analogija reconcilePendingFasiolas).
+  private reconcilePendingThree(room: GameRoom): void {
+    const pending = room.pendingThree;
+    if (!pending) {
+      return;
+    }
+    const target = room.players.find((p) => p.id === pending.targetPlayerId);
+    if (target) {
+      return;
+    }
+    room.discardPile.push(pending.card);
+    room.pendingThree = null;
+    room.dealerLog.push("Trejetas israsytas - taikinys nebe zaidime");
+    this.checkNnnEnd(room);
+    if (room.phase === "PLAYING") {
+      this.advanceNnnTurn(room, pending.showerPlayerId);
+    }
   }
 
   public getRoomPlayerSocketIds(roomCode: string): string[] {
@@ -1255,6 +1492,270 @@ export class GameEngine {
       return;
     }
     this.advanceTurn(room);
+  }
+
+  // -------------------------------------------------------------------------
+  // 999 zaidimo logika
+  // -------------------------------------------------------------------------
+
+  // Po ejimo: papildo ranka is kalades iki 3 ir, rankai bei kaladei istustejus,
+  // perkelia atverstas kortas i ranka.
+  private nnnSettleZones(room: GameRoom, player: InternalPlayer): void {
+    while (room.centerDeck.length > 0 && player.cards.length < NNN_HAND_SIZE) {
+      const card = room.centerDeck.pop();
+      if (!card) break;
+      player.cards.push(card);
+    }
+    if (player.cards.length === 0 && room.centerDeck.length === 0 && player.faceUpCards.length > 0) {
+      player.cards.push(...player.faceUpCards);
+      player.faceUpCards = [];
+      room.dealerLog.push(`${player.name} pasieme savo atverstas kortas i ranka`);
+    }
+  }
+
+  private applyNnnAction(room: GameRoom, actorPlayerId: string, action: NnnAction): void {
+    const actor = this.getPlayerOrThrow(room, actorPlayerId);
+
+    if (action.type === "PLAY_CARDS") {
+      this.nnnPlayCards(room, actor, action.cardIndexes);
+      return;
+    }
+    if (action.type === "SHOW_THREE") {
+      this.nnnShowThree(room, actor, action.cardIndex, action.targetPlayerId);
+      return;
+    }
+    if (action.type === "TAKE_PILE") {
+      this.nnnTakePile(room, actor);
+      return;
+    }
+    if (action.type === "PLAY_BLIND") {
+      this.nnnPlayBlind(room, actor, action.blindIndex);
+      return;
+    }
+    throw new Error("Unsupported 999 action");
+  }
+
+  private nnnPlayCards(room: GameRoom, actor: InternalPlayer, cardIndexes: number[]): void {
+    if (cardIndexes.length === 0) {
+      throw new Error("Nepasirinkta ne viena korta");
+    }
+    const unique = [...new Set(cardIndexes)];
+    if (unique.length !== cardIndexes.length) {
+      throw new Error("Kartojasi kortu indeksai");
+    }
+    if (unique.some((i) => i < 0 || i >= actor.cards.length)) {
+      throw new Error("Invalid card index");
+    }
+    const rank = actor.cards[unique[0]].rank;
+    if (unique.some((i) => actor.cards[i].rank !== rank)) {
+      throw new Error("Vienu metu galima desti tik tos pacios vertes kortas");
+    }
+    if (rank === "3") {
+      throw new Error("Trejeto i kruva desti negalima - ji rodoma zaidejui");
+    }
+    const top = room.tableStack[room.tableStack.length - 1] ?? null;
+    if (!canPlayOnNnnPile(top, rank)) {
+      throw new Error("Korta netinka ant kruvos virsaus");
+    }
+
+    const played: Card[] = [];
+    for (const i of [...unique].sort((a, b) => b - a)) {
+      played.push(...actor.cards.splice(i, 1));
+    }
+    room.tableStack.push(...played);
+    room.dealerLog.push(`${actor.name} padejo ${played.length} x ${rank}`);
+
+    this.nnnResolveAfterPilePlay(room, actor, rank);
+  }
+
+  // Bendra pabaiga padejus korta(s) i kruva (is rankos arba akla).
+  // 10 sudegina kruva; 2 ir 10 palieka ejima tam paciam zaidejui.
+  private nnnResolveAfterPilePlay(room: GameRoom, actor: InternalPlayer, rank: Rank): void {
+    if (rank === "10") {
+      room.discardPile.push(...room.tableStack);
+      room.tableStack = [];
+      room.dealerLog.push(`${actor.name} sudegino kruva su 10`);
+    }
+    this.nnnSettleZones(room, actor);
+    this.checkNnnEnd(room);
+    if (room.phase !== "PLAYING") {
+      return;
+    }
+    const keepsTurn = (rank === "10" || rank === "2") && nnnTotalCards(actor) > 0;
+    if (!keepsTurn) {
+      this.advanceNnnTurn(room, actor.id);
+    }
+  }
+
+  private nnnShowThree(room: GameRoom, actor: InternalPlayer, cardIndex: number, targetPlayerId: string): void {
+    if (cardIndex < 0 || cardIndex >= actor.cards.length) {
+      throw new Error("Invalid card index");
+    }
+    const card = actor.cards[cardIndex];
+    if (card.rank !== "3") {
+      throw new Error("Rodyti galima tik trejeta");
+    }
+    if (targetPlayerId === actor.id) {
+      throw new Error("Negalima rodyti trejeto sau");
+    }
+    const target = this.getPlayerOrThrow(room, targetPlayerId);
+    if (nnnTotalCards(target) === 0) {
+      throw new Error("Sis zaidejas jau baige zaidima");
+    }
+
+    actor.cards.splice(cardIndex, 1);
+    const targetCanDefend =
+      target.cards.some((c) => c.rank === "3") || target.faceUpCards.some((c) => c.rank === "3");
+    room.pendingThree = {
+      showerPlayerId: actor.id,
+      targetPlayerId,
+      card,
+      targetCanDefend,
+    };
+    room.dealerLog.push(`${actor.name} rodo trejeta zaidejui ${target.name}`);
+  }
+
+  // Taikinio atsakymas i parodyta trejeta. defend=false - taikinys pasiima
+  // kruva; defend=true - atsimusa savo trejetu ir kruva pasiima rodytojas.
+  public resolveThreeResponse(roomCode: string, targetPlayerId: string, defend: boolean): void {
+    const room = this.getRoomOrThrow(roomCode);
+    const pending = room.pendingThree;
+    if (!pending) {
+      throw new Error("Nera laukianco trejeto");
+    }
+    if (pending.targetPlayerId !== targetPlayerId) {
+      throw new Error("Atsakyti gali tik zaidejas, kuriam parodytas trejetas");
+    }
+    const target = this.getPlayerOrThrow(room, targetPlayerId);
+    const shower = room.players.find((p) => p.id === pending.showerPlayerId);
+
+    if (defend) {
+      let defenderThree: Card | null = null;
+      const handIdx = target.cards.findIndex((c) => c.rank === "3");
+      if (handIdx >= 0) {
+        defenderThree = target.cards.splice(handIdx, 1)[0];
+      } else {
+        const faceUpIdx = target.faceUpCards.findIndex((c) => c.rank === "3");
+        if (faceUpIdx >= 0) {
+          defenderThree = target.faceUpCards.splice(faceUpIdx, 1)[0];
+        }
+      }
+      if (!defenderThree) {
+        throw new Error("Neturi trejeto atsimusti");
+      }
+      room.discardPile.push(pending.card, defenderThree);
+      if (shower) {
+        shower.cards.push(...room.tableStack);
+        room.tableStack = [];
+      }
+      room.dealerLog.push(`${target.name} atsimuse trejetu - kruva pasiima rodytojas`);
+    } else {
+      room.discardPile.push(pending.card);
+      target.cards.push(...room.tableStack);
+      room.tableStack = [];
+      room.dealerLog.push(`${target.name} pasiima kruva del parodyto trejeto`);
+    }
+
+    room.pendingThree = null;
+    if (shower) {
+      this.nnnSettleZones(room, shower);
+    }
+    this.nnnSettleZones(room, target);
+    this.checkNnnEnd(room);
+    if (room.phase === "PLAYING") {
+      this.advanceNnnTurn(room, pending.showerPlayerId);
+    }
+  }
+
+  private nnnTakePile(room: GameRoom, actor: InternalPlayer): void {
+    if (room.tableStack.length === 0) {
+      throw new Error("Kruva tuscia - reikia zaisti korta");
+    }
+    actor.cards.push(...room.tableStack);
+    room.tableStack = [];
+    room.dealerLog.push(`${actor.name} pasieme kruva`);
+    this.advanceNnnTurn(room, actor.id);
+  }
+
+  private nnnPlayBlind(room: GameRoom, actor: InternalPlayer, blindIndex: number): void {
+    if (actor.cards.length > 0 || actor.faceUpCards.length > 0) {
+      throw new Error("Aklas kortas galima versti tik isnaudojus ranka ir atverstas");
+    }
+    if (blindIndex < 0 || blindIndex >= actor.blindCards.length) {
+      throw new Error("Invalid blind card index");
+    }
+
+    const [flipped] = actor.blindCards.splice(blindIndex, 1);
+
+    if (flipped.rank === "3") {
+      // Akla 3 keliauja i ranka - zaidejas ja privalo parodyti (SHOW_THREE).
+      actor.cards.push(flipped);
+      room.dealerLog.push(`${actor.name} atverte akla trejeta - turi ji parodyti`);
+      return;
+    }
+
+    const top = room.tableStack[room.tableStack.length - 1] ?? null;
+    if (canPlayOnNnnPile(top, flipped.rank)) {
+      room.tableStack.push(flipped);
+      room.dealerLog.push(`${actor.name} atverte akla ${flipped.rank}${flipped.suit} - tinka`);
+      this.nnnResolveAfterPilePlay(room, actor, flipped.rank);
+      return;
+    }
+
+    actor.cards.push(...room.tableStack, flipped);
+    room.tableStack = [];
+    room.dealerLog.push(`${actor.name} atverte akla ${flipped.rank}${flipped.suit} - netinka, pasiima kruva`);
+    this.advanceNnnTurn(room, actor.id);
+  }
+
+  // Ejimas kitam zaidejui, praleidziant jau baigusius (0 kortu visose zonose).
+  private advanceNnnTurn(room: GameRoom, fromPlayerId: string): void {
+    const idx = room.players.findIndex((p) => p.id === fromPlayerId);
+    if (idx < 0) {
+      return;
+    }
+    let next = (idx + 1) % room.players.length;
+    let hops = 0;
+    while (room.players[next] && nnnTotalCards(room.players[next]) === 0 && hops < room.players.length) {
+      next = (next + 1) % room.players.length;
+      hops += 1;
+    }
+    const nextPlayer = room.players[next] ?? null;
+    room.currentTurnPlayerId = nextPlayer?.id ?? null;
+    if (nextPlayer) {
+      this.nnnSettleZones(room, nextPlayer);
+    }
+  }
+
+  private checkNnnEnd(room: GameRoom): void {
+    const newlyFinished = room.players
+      .filter((p) => nnnTotalCards(p) === 0)
+      .map((p) => p.id)
+      .filter((id) => !room.finalRankingPlayerIds.includes(id));
+    room.finalRankingPlayerIds.push(...newlyFinished);
+
+    const playersWithCards = room.players.filter((p) => nnnTotalCards(p) > 0);
+    if (playersWithCards.length <= 1) {
+      room.phase = "FINISHED";
+      // Retas atvejis: abu paskutiniai baigia vienu metu (trejeto atsakymas) -
+      // pralaimetoju laikomas paskutinis reitinge.
+      room.loserPlayerId =
+        playersWithCards[0]?.id ?? room.finalRankingPlayerIds[room.finalRankingPlayerIds.length - 1] ?? null;
+      room.winnerPlayerIds = room.players.filter((p) => p.id !== room.loserPlayerId).map((p) => p.id);
+
+      const nonLoserIds = room.players.filter((p) => p.id !== room.loserPlayerId).map((p) => p.id);
+      const trackedNonLosers = room.finalRankingPlayerIds.filter((id) => id !== room.loserPlayerId);
+      const missingNonLosers = nonLoserIds.filter((id) => !trackedNonLosers.includes(id));
+      room.finalRankingPlayerIds = [...trackedNonLosers, ...missingNonLosers];
+      if (room.loserPlayerId) {
+        room.finalRankingPlayerIds.push(room.loserPlayerId);
+      }
+      room.lastChampionPlayerId = room.finalRankingPlayerIds[0] ?? null;
+      room.dealerLog.push("999 zaidimas baigtas");
+      room.currentTurnPlayerId = null;
+      room.pendingThree = null;
+      this.applyMatchRewards(room);
+    }
   }
 
   private checkPlayEnd(room: GameRoom): void {
@@ -1542,6 +2043,8 @@ export class GameEngine {
     }
     for (const p of room.players) {
       p.cards = [];
+      p.faceUpCards = [];
+      p.blindCards = [];
     }
     room.phase = "LOBBY";
     room.centerDeck = [];
@@ -1557,6 +2060,9 @@ export class GameEngine {
     room.pendingFasiolasCards = new Map();
     room.lastAction = null;
     room.matchRewards = null;
+    room.discardPile = [];
+    room.pendingThree = null;
+    // gameType ir lastChampionPlayerId ISLIEKA - cempionas pradeda kita maca.
     room.dealerLog = ["Naujas zaidimas - laukiame pradzios"];
   }
 
