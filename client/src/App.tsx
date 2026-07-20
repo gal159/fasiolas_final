@@ -1032,7 +1032,6 @@ function App() {
   }
 
   const accountLevel = useMemo(() => calcLevel(account.gamesPlayed), [account.gamesPlayed])
-  const accountLevelProgress = useMemo(() => (account.gamesPlayed % 5) / 5, [account.gamesPlayed])
   const accountLevelGamesLeft = useMemo(() => {
     const modulo = account.gamesPlayed % 5
     return modulo === 0 ? 5 : 5 - modulo
@@ -2954,15 +2953,28 @@ function App() {
               </button>
             </div>
 
-            <div className="profileQuickPanel menuStatsBar">
-              <div className="profileQuickInfo">
-                <strong>Profilio langelis</strong>
-                <span>Slotas {activeProfileSlot} | Lv. {accountLevel} | W {account.gamesWon} / L {account.gamesLost} | Total {account.gamesPlayed}</span>
-                <div className="levelProgressWrap" aria-label="Lygio progresas">
-                  <div className="levelProgressTrack">
-                    <div className="levelProgressFill" style={{ width: `${Math.round(accountLevelProgress * 100)}%` }} />
-                  </div>
-                  <span className="levelProgressText">Iki kito lygio: {accountLevelGamesLeft} game</span>
+            <div className="menuStatsBar">
+              <div className="statSeg">
+                <span className="statSegIcon" aria-hidden="true">&#128101;</span>
+                <div className="statSegText">
+                  <span className="statSegLabel">Iki kito lygio:</span>
+                  <strong className="statSegValue">{accountLevelGamesLeft} game</strong>
+                </div>
+              </div>
+              <div className="statSeg statSegEmblem" aria-label={`Slotas ${activeProfileSlot}, lygis ${accountLevel}`}>
+                <span className="statEmblem" aria-hidden="true">&#9670;</span>
+                <span className="statSegLabel">Slotas {activeProfileSlot} | Lv. {accountLevel}</span>
+              </div>
+              <div className="statSeg">
+                <div className="statSegText">
+                  <span className="statSegLabel">W / L</span>
+                  <strong className="statSegValue">{account.gamesWon} / {account.gamesLost}</strong>
+                </div>
+              </div>
+              <div className="statSeg">
+                <div className="statSegText">
+                  <span className="statSegLabel">Total</span>
+                  <strong className="statSegValue">{account.gamesPlayed}</strong>
                 </div>
               </div>
             </div>
