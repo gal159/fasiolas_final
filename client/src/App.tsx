@@ -2831,9 +2831,34 @@ function App() {
         <div className="connectionBanner">Rysys nutruko - jungiames is naujo...</div>
       ) : null}
       <header>
-        <div className="headerRow">
-          <h1 className="mainMenuAnimatedTitle">FASIOLAS</h1>
-          <button type="button" onClick={handleLogout}>Atsijungti</button>
+        <div className="topNav">
+          <span className="topNavLogo">FASIOLAS</span>
+          <nav className="topNavItems" aria-label="Pagrindinis meniu">
+            <button type="button" className="topNavItem" onClick={() => setShowMarketplaceWindow(true)}>
+              <span className="topNavIcon" aria-hidden="true">🛒</span>
+              Marketplace
+            </button>
+            <button type="button" className="topNavItem" onClick={() => setShowLeaderboard(true)}>
+              <span className="topNavIcon" aria-hidden="true">🏆</span>
+              Lyderiai
+            </button>
+            <button type="button" className="topNavItem" onClick={() => setShowRules(true)}>
+              <span className="topNavIcon" aria-hidden="true">❔</span>
+              Kaip zaisti
+            </button>
+            <button
+              type="button"
+              className="topNavItem"
+              onClick={() => {
+                sfx.setMuted(!soundMuted)
+                setSoundMuted(!soundMuted)
+              }}
+            >
+              <span className="topNavIcon" aria-hidden="true">{soundMuted ? '🔇' : '🔊'}</span>
+              Garsai
+            </button>
+          </nav>
+          <button type="button" className="topNavCta" onClick={handleLogout}>Atsijungti</button>
         </div>
       </header>
 
@@ -2862,16 +2887,6 @@ function App() {
           <button disabled={!roomCode} onClick={startGame}>
             Pradeti zaidima
           </button>
-          <button type="button" onClick={() => setShowRules(true)}>Kaip zaisti</button>
-          <button
-            type="button"
-            onClick={() => {
-              sfx.setMuted(!soundMuted)
-              setSoundMuted(!soundMuted)
-            }}
-          >
-            {soundMuted ? 'Garsai: isjungti' : 'Garsai: ijungti'}
-          </button>
           <button type="button" disabled={!roomCode} onClick={() => { void copyInviteLink() }}>
             {inviteCopied ? 'Nukopijuota!' : 'Kopijuoti kvietima'}
           </button>
@@ -2880,12 +2895,6 @@ function App() {
               Iskviesti bota
             </button>
           ) : null}
-          <button type="button" onClick={() => setShowMarketplaceWindow(true)}>
-            Marketplace
-          </button>
-          <button type="button" onClick={() => setShowLeaderboard(true)}>
-            Lyderiu lentele
-          </button>
         </div>
 
         {!roomCode ? (

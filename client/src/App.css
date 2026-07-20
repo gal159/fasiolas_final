@@ -8715,3 +8715,100 @@ header.profileOnboardingHeader {
   color: #ffcf99;
   text-shadow: 0 0 10px rgba(251, 146, 60, 0.7), 0 1px 2px rgba(0, 0, 0, 0.35);
 }
+
+/* HypeDrop stiliaus virsutine nav juosta main menu */
+.page.mainMenuPage > header {
+  width: auto !important;
+  max-width: none;
+  margin: -24px -24px 8px;
+  background: #171d2b !important;
+  border-radius: 0;
+  padding: 0 !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45) !important;
+}
+.topNav {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 8px 24px;
+  min-height: 64px;
+}
+.topNavLogo {
+  font-size: 26px;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: 1px;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  flex: none;
+}
+.topNavItems {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  flex: 1;
+  overflow-x: auto;
+}
+.topNavItem::before,
+.topNavCta::before {
+  display: none;
+}
+.topNavItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #97a1b8 !important;
+  background: transparent !important;
+  text-shadow: none;
+  white-space: nowrap;
+}
+.topNavItem:hover:not(:disabled) {
+  color: #ffffff !important;
+  filter: none;
+}
+.topNavIcon {
+  font-size: 18px;
+  line-height: 1;
+  filter: grayscale(1) brightness(1.4);
+}
+.topNavItem:hover:not(:disabled) .topNavIcon {
+  filter: grayscale(0);
+}
+.topNavCta {
+  margin-left: auto;
+  flex: none;
+  padding: 12px 26px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #ffffff !important;
+  background: #23a55a !important;
+  text-shadow: none;
+}
+.topNavCta:hover:not(:disabled) {
+  background: #2bbf68 !important;
+  filter: none;
+}
+@media (max-width: 720px) {
+  .page.mainMenuPage > header {
+    margin: -12px -12px 8px;
+  }
+  .topNav {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 8px 12px;
+  }
+  .topNavItems {
+    order: 3;
+    flex-basis: 100%;
+    justify-content: space-around;
+  }
+}
