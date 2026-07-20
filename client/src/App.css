@@ -8812,3 +8812,62 @@ header.profileOnboardingHeader {
     justify-content: space-around;
   }
 }
+
+/* Main menu layout pagal maketa: profilis kaireje, kambario blokas desineje */
+.menuLayout {
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) 1fr;
+  gap: 26px;
+  align-items: start;
+}
+.menuProfileCol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.menuProfileCol .actions {
+  justify-content: center;
+  margin-top: 0;
+}
+.menuMainCol {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.menuMainCol .row {
+  margin-bottom: 0;
+}
+.menuActionsGrid {
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-top: 4px;
+}
+.menuActionsGrid button {
+  padding: 16px 10px;
+  font-size: 16px;
+  white-space: normal;
+}
+.menuMainCol .gameTypeSwitchRow {
+  margin: 2px 0;
+}
+.menuMainCol .gameSwitch {
+  width: 100%;
+  justify-content: space-between;
+}
+.menuStatsBar .profileQuickInfo {
+  width: 100%;
+}
+@media (max-width: 900px) {
+  .menuLayout {
+    grid-template-columns: 1fr;
+  }
+  .menuProfileCol {
+    order: 2;
+  }
+  .menuActionsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

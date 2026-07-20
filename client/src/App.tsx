@@ -2862,42 +2862,95 @@ function App() {
         </div>
       </header>
 
-      <section className="panel">
-        <div className="row">
-          <label htmlFor="room">Kambarys</label>
-          <input
-            id="room"
-            value={roomCodeInput}
-            onChange={(event) => setRoomCodeInput(event.target.value.toUpperCase())}
-            placeholder="Kodas"
-          />
-        </div>
-        <div className="row">
-          <label htmlFor="room-password">Slaptazodis</label>
-          <input
-            id="room-password"
-            value={roomPasswordInput}
-            onChange={(event) => setRoomPasswordInput(event.target.value)}
-            placeholder="Kambario slaptazodis (nebutina)"
-          />
-        </div>
-        <div className="actions">
-          <button onClick={createRoom}>Sukurti kambari</button>
-          <button onClick={() => joinRoom()}>Prisijungti</button>
-          <button disabled={!roomCode} onClick={startGame}>
-            Pradeti zaidima
-          </button>
-          <button type="button" disabled={!roomCode} onClick={() => { void copyInviteLink() }}>
-            {inviteCopied ? 'Nukopijuota!' : 'Kopijuoti kvietima'}
-          </button>
-          {payload?.state.phase === 'LOBBY' ? (
-            <button type="button" onClick={() => emitAck('add_bot', {})}>
-              Iskviesti bota
-            </button>
-          ) : null}
-        </div>
+      <section className="panel menuPanel">
+        <div className="menuLayout">
+          <aside className="menuProfileCol">
+            {payload && payload.state.phase === 'LOBBY' ? (
+              <div className="lobbyPlayersRow" aria-label="Prisijunge zaidejai">
+                {payload.state.players.map((p) => (
+                  <div key={`lobby-player-${p.id}`} className="lobbyPlayerCard">
+                    {renderFlippableCard(p.profile, true, p.name, p.id)}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              renderFlippableCard(profilePanelProfile, true, name || me?.name, payload?.yourPlayerId ?? 'own')
+            )}
+            <div className="actions">
+              <button type="button" onClick={() => setAppStage('profileSetup')}>Keisti veikeja</button>
+            </div>
+          </aside>
 
-        {!roomCode ? (
+          <div className="menuMainCol">
+            <div className="row">
+              <label htmlFor="room">Kambarys</label>
+              <input
+                id="room"
+                value={roomCodeInput}
+                onChange={(event) => setRoomCodeInput(event.target.value.toUpperCase())}
+                placeholder="Kodas"
+              />
+            </div>
+            <div className="row">
+              <label htmlFor="room-password">Slaptazodis</label>
+              <input
+                id="room-password"
+                value={roomPasswordInput}
+                onChange={(event) => setRoomPasswordInput(event.target.value)}
+                placeholder="Kambario slaptazodis (nebutina)"
+              />
+            </div>
+            <div className="actions menuActionsGrid">
+              <button onClick={createRoom}>Sukurti kambari</button>
+              <button onClick={() => joinRoom()}>Prisijungti</button>
+              <button disabled={!roomCode} onClick={startGame}>
+                Pradeti zaidima
+              </button>
+              <button type="button" disabled={!roomCode} onClick={() => { void copyInviteLink() }}>
+                {inviteCopied ? 'Nukopijuota!' : 'Kopijuoti kvietima'}
+              </button>
+              {payload?.state.phase === 'LOBBY' ? (
+                <button type="button" onClick={() => emitAck('add_bot', {})}>
+                  Iskviesti bota
+                </button>
+              ) : null}
+            </div>
+
+            <div className="gameTypeSwitchRow">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={selectedGameType === 'nnn'}
+                aria-label="Zaidimo tipas"
+                className={selectedGameType === 'nnn' ? 'gameSwitch on' : 'gameSwitch'}
+                onClick={() => setSelectedGameType((current) => (current === 'nnn' ? 'fasiolas' : 'nnn'))}
+              >
+                <span className={selectedGameType === 'fasiolas' ? 'gameSwitchLabel left lit' : 'gameSwitchLabel left'}>
+                  Fasiolas
+                </span>
+                <span className="gameSwitchTrack" aria-hidden="true">
+                  <span className="gameSwitchThumb" />
+                </span>
+                <span className={selectedGameType === 'nnn' ? 'gameSwitchLabel right lit' : 'gameSwitchLabel right'}>
+                  999
+                </span>
+              </button>
+            </div>
+
+            <div className="profileQuickPanel menuStatsBar">
+              <div className="profileQuickInfo">
+                <strong>Profilio langelis</strong>
+                <span>Slotas {activeProfileSlot} | Lv. {accountLevel} | W {account.gamesWon} / L {account.gamesLost} | Total {account.gamesPlayed}</span>
+                <div className="levelProgressWrap" aria-label="Lygio progresas">
+                  <div className="levelProgressTrack">
+                    <div className="levelProgressFill" style={{ width: `${Math.round(accountLevelProgress * 100)}%` }} />
+                  </div>
+                  <span className="levelProgressText">Iki kito lygio: {accountLevelGamesLeft} game</span>
+                </div>
+              </div>
+            </div>
+
+            {!roomCode ? (
           <div className="lobbyList" aria-label="Aktyvus kambariai">
             <h3>Aktyvus kambariai</h3>
             {lobbies.length === 0 ? (
@@ -2921,53 +2974,7 @@ function App() {
               </ul>
             )}
           </div>
-        ) : null}
-
-        <div className="gameTypeSwitchRow">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={selectedGameType === 'nnn'}
-            aria-label="Zaidimo tipas"
-            className={selectedGameType === 'nnn' ? 'gameSwitch on' : 'gameSwitch'}
-            onClick={() => setSelectedGameType((current) => (current === 'nnn' ? 'fasiolas' : 'nnn'))}
-          >
-            <span className={selectedGameType === 'fasiolas' ? 'gameSwitchLabel left lit' : 'gameSwitchLabel left'}>
-              Fasiolas
-            </span>
-            <span className="gameSwitchTrack" aria-hidden="true">
-              <span className="gameSwitchThumb" />
-            </span>
-            <span className={selectedGameType === 'nnn' ? 'gameSwitchLabel right lit' : 'gameSwitchLabel right'}>
-              999
-            </span>
-          </button>
-        </div>
-
-        <div className="profileQuickPanel">
-          <div className="profileQuickInfo">
-            <strong>Profilio langelis</strong>
-            <span>Slotas {activeProfileSlot} | Lv. {accountLevel} | W {account.gamesWon} / L {account.gamesLost} | Total {account.gamesPlayed}</span>
-            <div className="levelProgressWrap" aria-label="Lygio progresas">
-              <div className="levelProgressTrack">
-                <div className="levelProgressFill" style={{ width: `${Math.round(accountLevelProgress * 100)}%` }} />
-              </div>
-              <span className="levelProgressText">Iki kito lygio: {accountLevelGamesLeft} game</span>
-            </div>
-          </div>
-          {payload && payload.state.phase === 'LOBBY' ? (
-            <div className="lobbyPlayersRow" aria-label="Prisijunge zaidejai">
-              {payload.state.players.map((p) => (
-                <div key={`lobby-player-${p.id}`} className="lobbyPlayerCard">
-                  {renderFlippableCard(p.profile, true, p.name, p.id)}
-                </div>
-              ))}
-            </div>
-          ) : (
-            renderFlippableCard(profilePanelProfile, true, name || me?.name, payload?.yourPlayerId ?? 'own')
-          )}
-          <div className="actions">
-            <button type="button" onClick={() => setAppStage('profileSetup')}>Keisti veikeja</button>
+            ) : null}
           </div>
         </div>
 
