@@ -2839,10 +2839,6 @@ function App() {
 
       <section className="panel">
         <div className="row">
-          <label htmlFor="name">Vardas</label>
-          <input id="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Slapyvardis" />
-        </div>
-        <div className="row">
           <label htmlFor="room">Kambarys</label>
           <input
             id="room"
