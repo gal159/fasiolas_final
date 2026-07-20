@@ -2856,27 +2856,6 @@ function App() {
             placeholder="Kambario slaptazodis (nebutina)"
           />
         </div>
-        <div className="row gameTypeSwitchRow">
-          <label id="game-type-label">Zaidimas</label>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={selectedGameType === 'nnn'}
-            aria-labelledby="game-type-label"
-            className={selectedGameType === 'nnn' ? 'gameSwitch on' : 'gameSwitch'}
-            onClick={() => setSelectedGameType((current) => (current === 'nnn' ? 'fasiolas' : 'nnn'))}
-          >
-            <span className={selectedGameType === 'fasiolas' ? 'gameSwitchLabel left lit' : 'gameSwitchLabel left'}>
-              Fasiolas
-            </span>
-            <span className="gameSwitchTrack" aria-hidden="true">
-              <span className="gameSwitchThumb" />
-            </span>
-            <span className={selectedGameType === 'nnn' ? 'gameSwitchLabel right lit' : 'gameSwitchLabel right'}>
-              999
-            </span>
-          </button>
-        </div>
         <div className="actions">
           <button onClick={createRoom}>Sukurti kambari</button>
           <button onClick={() => joinRoom()}>Prisijungti</button>
@@ -2934,6 +2913,27 @@ function App() {
             )}
           </div>
         ) : null}
+
+        <div className="gameTypeSwitchRow">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={selectedGameType === 'nnn'}
+            aria-label="Zaidimo tipas"
+            className={selectedGameType === 'nnn' ? 'gameSwitch on' : 'gameSwitch'}
+            onClick={() => setSelectedGameType((current) => (current === 'nnn' ? 'fasiolas' : 'nnn'))}
+          >
+            <span className={selectedGameType === 'fasiolas' ? 'gameSwitchLabel left lit' : 'gameSwitchLabel left'}>
+              Fasiolas
+            </span>
+            <span className="gameSwitchTrack" aria-hidden="true">
+              <span className="gameSwitchThumb" />
+            </span>
+            <span className={selectedGameType === 'nnn' ? 'gameSwitchLabel right lit' : 'gameSwitchLabel right'}>
+              999
+            </span>
+          </button>
+        </div>
 
         <div className="profileQuickPanel">
           <div className="profileQuickInfo">
