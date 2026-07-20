@@ -533,16 +533,21 @@ export class GameEngine {
       byRank.set(card.rank, list);
     });
 
-    let bestRank: Rank | null = null;
+    const playableRanks: Rank[] = [];
     for (const rank of byRank.keys()) {
       if (isNnnMagic(rank) || !canPlayOnNnnPile(top, rank)) {
         continue;
       }
-      if (bestRank === null || RANK_ORDER[rank] < RANK_ORDER[bestRank]) {
-        bestRank = rank;
-      }
+      playableRanks.push(rank);
     }
-    if (bestRank !== null) {
+    if (playableRanks.length > 0) {
+      playableRanks.sort((a, b) => RANK_ORDER[a] - RANK_ORDER[b]);
+      // Dazniausiai zemiausia, bet kartais kita tinkama - kitaip botai gali
+      // amzinai ratu stumdyti ta pacia korta (pvz. viena 7 endgame'e).
+      const bestRank =
+        playableRanks.length > 1 && Math.random() < 0.25
+          ? playableRanks[Math.floor(Math.random() * playableRanks.length)]
+          : playableRanks[0];
       return { type: "PLAY_CARDS", cardIndexes: byRank.get(bestRank) ?? [] };
     }
 
@@ -1569,19 +1574,27 @@ export class GameEngine {
   }
 
   // Bendra pabaiga padejus korta(s) i kruva (is rankos arba akla).
-  // 10 sudegina kruva; 2 ir 10 palieka ejima tam paciam zaidejui.
+  // 10 arba 4 vienodos virsuje sudegina kruva; 2 ir sudeginimas palieka
+  // ejima tam paciam zaidejui.
   private nnnResolveAfterPilePlay(room: GameRoom, actor: InternalPlayer, rank: Rank): void {
-    if (rank === "10") {
+    // 4 tos pacios vertes kortos kruvos virsuje (gali buti sudetos keliu
+    // zaideju per kelis ejimus) veikia kaip 10.
+    const top4 = room.tableStack.slice(-4);
+    const fourOfAKind = top4.length === 4 && top4.every((c) => c.rank === top4[0].rank);
+    const burns = rank === "10" || fourOfAKind;
+    if (burns) {
       room.discardPile.push(...room.tableStack);
       room.tableStack = [];
-      room.dealerLog.push(`${actor.name} sudegino kruva su 10`);
+      room.dealerLog.push(
+        rank === "10" ? `${actor.name} sudegino kruva su 10` : `${actor.name} uzbaige 4 x ${rank} - kruva sudege`,
+      );
     }
     this.nnnSettleZones(room, actor);
     this.checkNnnEnd(room);
     if (room.phase !== "PLAYING") {
       return;
     }
-    const keepsTurn = (rank === "10" || rank === "2") && nnnTotalCards(actor) > 0;
+    const keepsTurn = (burns || rank === "2") && nnnTotalCards(actor) > 0;
     if (!keepsTurn) {
       this.advanceNnnTurn(room, actor.id);
     }

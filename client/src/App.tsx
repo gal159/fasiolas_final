@@ -3751,7 +3751,7 @@ function App() {
             <h3>Ejimas</h3>
             <p>Dek viena ar kelias TOS PACIOS vertes kortas ant kruvos - verte turi buti lygi arba aukstesne uz virsutine (tvarka: 4, 5, 6, 8, 9, J, Q, K, A). Jei desti negali - pasiimi visa kruva i ranka.</p>
             <h3>Magiskos kortos</h3>
-            <p>2 - dedama ant bet ko, tada dedi dar viena korta (ant 2 limpa viskas). 3 - niekada nededama i kruva: parodai ja pasirinktam zaidejui ir tas pasiima visa kruva, nebent pats turi 3 ir atsimusa - tada kruva pasiimi tu. Panaudoti trejetai isbraukiami is zaidimo. 7 - dedama kaip iprasta korta, bet kitas zaidejas privalo deti 7 ar zemesne. 10 - dedama ant bet ko, sudegina kruva (kortos isbraukiamos) ir eini dar karta.</p>
+            <p>2 - dedama ant bet ko, tada dedi dar viena korta (ant 2 limpa viskas). 3 - niekada nededama i kruva: parodai ja pasirinktam zaidejui ir tas pasiima visa kruva, nebent pats turi 3 ir atsimusa - tada kruva pasiimi tu. Panaudoti trejetai isbraukiami is zaidimo. 7 - dedama kaip iprasta korta, bet kitas zaidejas privalo deti 7 ar zemesne. 10 - dedama ant bet ko, sudegina kruva (kortos isbraukiamos) ir eini dar karta. Jei kruvos virsuje atsiduria 4 tos pacios vertes kortos (kad ir keliu zaideju sudetos) - kruva sudega kaip nuo 10 ir uzbaiges ketverta eina dar karta.</p>
             <h3>Pabaiga</h3>
             <p>Rankai ir kaladei istustejus pasiimi savo atverstas kortas. Joms pasibaigus verti aklas po viena: tinka - zaidziama, netinka - pasiimi kruva ir ta korta. Laimi tie, kas pirmi atsikrato VISU kortu; paskutinis likes su kortomis pralaimi. Taskai tokie patys kaip Fasiolas.</p>
             <h3>Taskai</h3>

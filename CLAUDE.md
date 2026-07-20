@@ -60,6 +60,8 @@ fazeje bandyk PLAY_CARD 0..n, fallback TAKE_OLDEST).
 - KRITISKA: `getClientState` nnn kambariams siuncia `topCard: null` — rankos
   slaptos. 7 apribojimas isvedamas is kruvos virsaus (jokio flag'o). Ejimu
   praleidimas pagal `nnnTotalCards` (ranka+atverstos+aklos), ne pagal ranka.
+- 4 tos pacios vertes kortos kruvos virsuje (gali buti keliu zaideju) sudegina
+  kruva kaip 10 ir uzbaigejas eina dar karta (`nnnResolveAfterPilePlay`).
 - Variklio simuliacija: `npx tsx scripts/test-nnn-engine.ts` (200 partiju su
   botais iki FINISHED + kortu apskaitos invariantas 52).
 
