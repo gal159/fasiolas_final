@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /references/
+
+Sitemap: https://lediniaisprendimai.com/sitemap.xml

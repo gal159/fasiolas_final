@@ -166,6 +166,18 @@ type LobbySummary = {
   hostName: string
   playerCount: number
   hasPassword: boolean
+  // Nebutinas (seni serveriai lauko nesiuncia) - tada fasiolas.
+  gameType?: 'fasiolas' | 'nnn'
+}
+
+const GAME_TYPE_LABELS: Record<'fasiolas' | 'nnn', string> = {
+  fasiolas: 'Fasiolas',
+  nnn: '999',
+}
+
+const GAME_TYPE_MAX_PLAYERS: Record<'fasiolas' | 'nnn', number> = {
+  fasiolas: 8,
+  nnn: 5,
 }
 
 type LeaderboardEntry = {
@@ -555,6 +567,8 @@ type Seat = {
   profile: PlayerProfile
   cardCount: number
   topCard: Card | null
+  faceUpCards: Card[]
+  blindCount: number
   x: number
   y: number
   isMe: boolean
@@ -622,6 +636,9 @@ function App() {
   const [tableScale, setTableScale] = useState(() => getStoredTableScale())
   const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null)
   const [isRevealedCardDragged, setIsRevealedCardDragged] = useState(false)
+  // 999: zaidimo tipo jungiklis kambario kurimui ir rankos multi-select.
+  const [selectedGameType, setSelectedGameType] = useState<'fasiolas' | 'nnn'>('fasiolas')
+  const [selectedHandIndexes, setSelectedHandIndexes] = useState<number[]>([])
   const [playingHandSortMode, setPlayingHandSortMode] = useState<PlayingHandSortMode>('suit')
   const [flyingPlayedCard, setFlyingPlayedCard] = useState<{
     card: Card
@@ -1131,6 +1148,14 @@ function App() {
 
   const isMyTurn = Boolean(payload && payload.state.currentTurnPlayerId === payload.yourPlayerId)
 
+  const isNnn = (payload?.state.gameType ?? 'fasiolas') === 'nnn'
+
+  // 999: pazymetos kortos nurodomos indeksais - rankai pasikeitus jos nebegalioja.
+  const handSignature = payload ? payload.yourHand.map((c) => `${c.rank}${c.suit}`).join(',') : ''
+  useEffect(() => {
+    setSelectedHandIndexes([])
+  }, [handSignature])
+
   // Vibracija telefone (Android; iOS Safari vibrate API nepalaiko), kai ateina tavo eile.
   const wasMyTurnRef = useRef(false)
   useEffect(() => {
@@ -1292,6 +1317,8 @@ function App() {
         profile: p.profile,
         cardCount: p.cardCount,
         topCard: p.topCard,
+        faceUpCards: p.faceUpCards ?? [],
+        blindCount: p.blindCount ?? 0,
         x: 50 + Math.cos(angleRad) * radius.x,
         y: p.id === payload.yourPlayerId ? 99 : 50 + Math.sin(angleRad) * radius.y,
         isMe: p.id === payload.yourPlayerId,
@@ -1531,6 +1558,7 @@ function App() {
         authUserId: getStoredAuthUserId(),
         password: roomPasswordInput.trim() || undefined,
         profile: withSlot(profileDraft, activeProfileSlot),
+        gameType: selectedGameType,
       },
       (response) => {
       setRoomCode(response.roomCode as string)
@@ -1760,12 +1788,15 @@ function App() {
     } else if (info.actionType === 'MOVE_VISIBLE_CARD') {
       source = cardOfSeat(seatOf(info.actorPlayerId))
       target = cardOfSeat(seatOf(info.toPlayerId))
-    } else if (info.actionType === 'PLAY_CARD') {
+    } else if (info.actionType === 'PLAY_CARD' || info.actionType === 'PLAY_CARDS' || info.actionType === 'PLAY_BLIND') {
       source = cardOfSeat(seatOf(info.actorPlayerId))
       target = centerArea
-    } else if (info.actionType === 'TAKE_OLDEST') {
+    } else if (info.actionType === 'TAKE_OLDEST' || info.actionType === 'TAKE_PILE') {
       source = centerArea
       target = cardOfSeat(seatOf(info.actorPlayerId))
+    } else if (info.actionType === 'SHOW_THREE') {
+      source = cardOfSeat(seatOf(info.actorPlayerId))
+      target = cardOfSeat(seatOf(info.toPlayerId))
     } else {
       return
     }
@@ -1790,7 +1821,7 @@ function App() {
       height: sourceRect.height,
     }
 
-    if (info.actionType === 'PLAY_CARD') {
+    if (info.actionType === 'PLAY_CARD' || info.actionType === 'PLAY_CARDS' || info.actionType === 'PLAY_BLIND') {
       setFlyingPlayedCard(fly)
       window.setTimeout(() => setFlyingPlayedCard(null), 330)
     } else {
@@ -1877,8 +1908,60 @@ function App() {
       return
     }
 
-    sendAction({ type: 'PLAY_CARD', cardIndex: draggedCardIndex })
+    if (isNnn) {
+      sendAction({ type: 'PLAY_CARDS', cardIndexes: [draggedCardIndex] })
+    } else {
+      sendAction({ type: 'PLAY_CARD', cardIndex: draggedCardIndex })
+    }
     setDraggedCardIndex(null)
+  }
+
+  // 999: rankos kortos zymejimas. Kita verte pazymejus - pradedama nauja atranka.
+  function toggleNnnCardSelection(index: number): void {
+    if (!payload) {
+      return
+    }
+    setSelectedHandIndexes((current) => {
+      if (current.includes(index)) {
+        return current.filter((i) => i !== index)
+      }
+      const selectedRank = current.length > 0 ? payload.yourHand[current[0]]?.rank : null
+      if (selectedRank && payload.yourHand[index]?.rank !== selectedRank) {
+        return [index]
+      }
+      return [...current, index]
+    })
+  }
+
+  function playSelectedNnnCards(sourceElement?: HTMLElement | null): void {
+    if (!payload || !isMyTurn || flyingPlayedCard || selectedHandIndexes.length === 0) {
+      return
+    }
+    const indexes = [...selectedHandIndexes]
+    const firstCard = payload.yourHand[indexes[0]]
+    setSelectedHandIndexes([])
+
+    const target = centerDropRef.current
+    if (!sourceElement || !target || !firstCard) {
+      sendAction({ type: 'PLAY_CARDS', cardIndexes: indexes })
+      return
+    }
+
+    const sourceRect = sourceElement.getBoundingClientRect()
+    const targetRect = target.getBoundingClientRect()
+    setFlyingPlayedCard({
+      card: firstCard,
+      fromX: sourceRect.left,
+      fromY: sourceRect.top,
+      toX: targetRect.left + (targetRect.width - sourceRect.width) / 2,
+      toY: targetRect.top + (targetRect.height - sourceRect.height) / 2,
+      width: sourceRect.width,
+      height: sourceRect.height,
+    })
+    window.setTimeout(() => {
+      sendAction({ type: 'PLAY_CARDS', cardIndexes: indexes })
+      setFlyingPlayedCard(null)
+    }, 330)
   }
 
   function handlePlayCardWithSlide(index: number, card: Card, sourceElement?: HTMLElement | null): void {
@@ -1886,10 +1969,13 @@ function App() {
       return
     }
 
+    const playAction: TurnAction = isNnn
+      ? { type: 'PLAY_CARDS', cardIndexes: [index] }
+      : { type: 'PLAY_CARD', cardIndex: index }
     const source = sourceElement ?? playingCardButtonRefs.current.get(index) ?? null
     const target = centerDropRef.current
     if (!source || !target) {
-      sendAction({ type: 'PLAY_CARD', cardIndex: index })
+      sendAction(playAction)
       return
     }
 
@@ -1909,7 +1995,7 @@ function App() {
     })
 
     window.setTimeout(() => {
-      sendAction({ type: 'PLAY_CARD', cardIndex: index })
+      sendAction(playAction)
       setFlyingPlayedCard(null)
     }, 330)
   }
@@ -2774,6 +2860,30 @@ function App() {
             placeholder="Kambario slaptazodis (nebutina)"
           />
         </div>
+        <div className="row gameTypeSwitchRow">
+          <label id="game-type-label">Zaidimas</label>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={selectedGameType === 'nnn'}
+            aria-labelledby="game-type-label"
+            className={selectedGameType === 'nnn' ? 'gameSwitch on' : 'gameSwitch'}
+            onClick={() => setSelectedGameType((current) => (current === 'nnn' ? 'fasiolas' : 'nnn'))}
+          >
+            <span className={selectedGameType === 'fasiolas' ? 'gameSwitchLabel left lit' : 'gameSwitchLabel left'}>
+              Fasiolas
+            </span>
+            <span className="gameSwitchTrack" aria-hidden="true">
+              <span className="gameSwitchThumb" />
+            </span>
+            <span className={selectedGameType === 'nnn' ? 'gameSwitchLabel right lit' : 'gameSwitchLabel right'}>
+              999
+            </span>
+          </button>
+          <span className="gameSwitchHint">
+            {selectedGameType === 'nnn' ? 'Naujas kambarys: 999 (iki 5 zaideju)' : 'Naujas kambarys: Fasiolas (iki 8 zaideju)'}
+          </span>
+        </div>
         <div className="actions">
           <button onClick={createRoom}>Sukurti kambari</button>
           <button onClick={() => joinRoom()}>Prisijungti</button>
@@ -2816,8 +2926,11 @@ function App() {
                 {lobbies.map((lobby) => (
                   <li key={lobby.roomCode} className="lobbyListRow">
                     <span className="lobbyListHost">{lobby.hostName}</span>
+                    <span className={(lobby.gameType ?? 'fasiolas') === 'nnn' ? 'lobbyGameBadge nnn' : 'lobbyGameBadge'}>
+                      {GAME_TYPE_LABELS[lobby.gameType ?? 'fasiolas']}
+                    </span>
                     <span className="lobbyListMeta">
-                      Kodas: {lobby.roomCode} | Zaidejai: {lobby.playerCount}/8{lobby.hasPassword ? ' | Uzrakintas' : ''}
+                      Kodas: {lobby.roomCode} | Zaidejai: {lobby.playerCount}/{GAME_TYPE_MAX_PLAYERS[lobby.gameType ?? 'fasiolas']}{lobby.hasPassword ? ' | Uzrakintas' : ''}
                     </span>
                     <button type="button" onClick={() => joinRoom(lobby.roomCode, lobby.hasPassword)}>
                       {lobby.hasPassword ? 'Jungtis su slaptazodziu' : 'Jungtis'}
@@ -2978,6 +3091,14 @@ function App() {
             </div>
             {error ? <div className="tableInlineError">{error}</div> : null}
 
+            {payload.state.pendingThree && payload.state.pendingThree.targetPlayerId !== payload.yourPlayerId ? (
+              <div className="pendingThreeBanner">
+                {payload.state.players.find((p) => p.id === payload.state.pendingThree?.showerPlayerId)?.name ?? '?'}{' '}
+                rodo trejeta zaidejui{' '}
+                {payload.state.players.find((p) => p.id === payload.state.pendingThree?.targetPlayerId)?.name ?? '?'} - laukiame atsakymo
+              </div>
+            ) : null}
+
             <div className={`roundTableArea table-${me?.profile.tableId ?? 'common_green'}`}>
               <div className="roundTableStage" style={{ '--table-scale': tableScale } as CSSProperties}>
               {payload.state.phase === 'DEALING' ? (
@@ -3030,7 +3151,128 @@ function App() {
                 </div>
               ) : null}
 
-              {payload.state.phase === 'PLAYING' ? (
+              {payload.state.phase === 'PLAYING' && isNnn ? (
+                <div className="playingActionDock nnnActionDock">
+                  <strong>999: zaidimas</strong>
+                  <span className="nnnPileHint">
+                    {(() => {
+                      const top = payload.state.tableStack[payload.state.tableStack.length - 1] ?? null
+                      if (!top) {
+                        return 'Kruva tuscia - dek bet ka (isskyrus 3)'
+                      }
+                      if (top.rank === '2') {
+                        return 'Ant 2 limpa viskas'
+                      }
+                      if (top.rank === '7') {
+                        return 'Reikia detis 7 arba zemesne (arba 2/10)'
+                      }
+                      return `Reikia ${top.rank} arba aukstesnes (arba 2/10)`
+                    })()}
+                  </span>
+                  <div className="playingActionSortRow">
+                    <button
+                      type="button"
+                      className={playingHandSortMode === 'suit' ? 'playingSortButton active' : 'playingSortButton'}
+                      onClick={() => setPlayingHandSortMode('suit')}
+                    >
+                      Rikiuoti pagal zenkla
+                    </button>
+                    <button
+                      type="button"
+                      className={playingHandSortMode === 'rank' ? 'playingSortButton active' : 'playingSortButton'}
+                      onClick={() => setPlayingHandSortMode('rank')}
+                    >
+                      Rikiuoti pagal verte
+                    </button>
+                  </div>
+                  <div className="playingActionCards">
+                    {sortedPlayingHand.map(({ card, index }) => {
+                      const selected = selectedHandIndexes.includes(index)
+                      const selectedRank = selectedHandIndexes.length > 0 ? payload.yourHand[selectedHandIndexes[0]]?.rank : null
+                      const dimmed = Boolean(selectedRank && card.rank !== selectedRank && !selected)
+                      return (
+                        <button
+                          key={`nnn-dock-${card.rank}${card.suit}-${index}`}
+                          type="button"
+                          className={[
+                            'playingActionCardPick',
+                            'nnnCardPick',
+                            selected ? 'selected' : '',
+                            dimmed ? 'dimmed' : '',
+                          ].filter(Boolean).join(' ')}
+                          disabled={!isMyTurn || Boolean(flyingPlayedCard)}
+                          onClick={() => toggleNnnCardSelection(index)}
+                          title={selected ? `Atzymeti ${cardLabel(card)}` : `Pazymeti ${cardLabel(card)}`}
+                        >
+                          {renderVisualCard(card, true)}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {selectedHandIndexes.length > 0 && payload.yourHand[selectedHandIndexes[0]]?.rank === '3' ? (
+                    <div className="nnnShowThreeRow">
+                      <span>Rodyti trejeta:</span>
+                      {payload.state.players
+                        .filter((p) => p.id !== payload.yourPlayerId && (p.cardCount + (p.faceUpCards?.length ?? 0) + (p.blindCount ?? 0)) > 0)
+                        .map((p) => (
+                          <button
+                            key={`show-three-${p.id}`}
+                            type="button"
+                            disabled={!isMyTurn}
+                            onClick={() => {
+                              const cardIndex = selectedHandIndexes[0]
+                              setSelectedHandIndexes([])
+                              sendAction({ type: 'SHOW_THREE', cardIndex, targetPlayerId: p.id })
+                            }}
+                          >
+                            {p.name}
+                          </button>
+                        ))}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={
+                        !isMyTurn ||
+                        selectedHandIndexes.length === 0 ||
+                        payload.yourHand[selectedHandIndexes[0]]?.rank === '3' ||
+                        Boolean(flyingPlayedCard)
+                      }
+                      onClick={(event) => playSelectedNnnCards(event.currentTarget)}
+                    >
+                      Zaisti ({selectedHandIndexes.length})
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={!isMyTurn || payload.state.tableStack.length === 0}
+                    onClick={() => sendAction({ type: 'TAKE_PILE' })}
+                  >
+                    Paimti kruva ({payload.state.tableStack.length})
+                  </button>
+                  {payload.yourHand.length === 0 &&
+                  (me?.faceUpCards?.length ?? 0) === 0 &&
+                  (me?.blindCount ?? 0) > 0 ? (
+                    <div className="nnnBlindRow">
+                      <span>Aklos kortos - versk viena:</span>
+                      {Array.from({ length: me?.blindCount ?? 0 }).map((_, blindIndex) => (
+                        <button
+                          key={`blind-${blindIndex}`}
+                          type="button"
+                          className="nnnBlindCardButton"
+                          disabled={!isMyTurn}
+                          onClick={() => sendAction({ type: 'PLAY_BLIND', blindIndex })}
+                          title="Versti akla korta"
+                        >
+                          {renderCardBack(true)}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {payload.state.phase === 'PLAYING' && !isNnn ? (
                 <div className="playingActionDock">
                   <strong>2 dalis: zaidimas</strong>
                   <div className="playingActionSortRow">
@@ -3124,12 +3366,21 @@ function App() {
 
                 {payload.state.phase === 'PLAYING' ? (
                   <div className="tableCenterStack" aria-label="Stalo kortos">
+                    {isNnn && payload.state.tableStack.length === 0 ? (
+                      <span className="nnnEmptyPile">Kruva tuscia</span>
+                    ) : null}
                     {payload.state.tableStack.map((card, index) => (
                       <div key={`center-stack-${card.rank}${card.suit}-${index}`} className="tableCenterStackCard">
                         {renderVisualCard(card, true)}
                       </div>
                     ))}
                   </div>
+                ) : null}
+
+                {payload.state.phase === 'PLAYING' && isNnn ? (
+                  <span className="nnnPileInfo">
+                    Kalade: {payload.state.centerDeckCount} | Ismesta: {payload.state.discardedCount ?? 0}
+                  </span>
                 ) : null}
               </div>
 
@@ -3198,7 +3449,25 @@ function App() {
                         : null}
                     </div>
                   </div>
-                  <span>Kortos: {seat.cardCount}{seat.disconnected ? ' (atsijunge)' : ''}</span>
+                  {isNnn ? (
+                    <div className="nnnSeatCards" aria-label="Atverstos ir aklos kortos">
+                      {seat.faceUpCards.map((card, cardIndex) => (
+                        <span key={`faceup-${seat.id}-${card.rank}${card.suit}-${cardIndex}`} className="nnnFaceUpCard">
+                          {renderVisualCard(card, true)}
+                        </span>
+                      ))}
+                      {Array.from({ length: seat.blindCount }).map((_, blindIndex) => (
+                        <span key={`blindback-${seat.id}-${blindIndex}`} className="nnnBlindBack">
+                          {renderCardBack(true)}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  {isNnn ? (
+                    <span>Rankoje: {seat.cardCount}{seat.disconnected ? ' (atsijunge)' : ''}</span>
+                  ) : (
+                    <span>Kortos: {seat.cardCount}{seat.disconnected ? ' (atsijunge)' : ''}</span>
+                  )}
                 </div>
               ))}
               </div>
@@ -3339,7 +3608,7 @@ function App() {
           </section>
 
           {payload.state.phase === 'DEALING' ? renderDealingControls() : null}
-          {payload.state.phase === 'PLAYING' ? renderPlayingControls() : null}
+          {payload.state.phase === 'PLAYING' && !isNnn ? renderPlayingControls() : null}
 
           <section className="panel">
             <h2>Zaidimo zurnalas</h2>
@@ -3350,6 +3619,35 @@ function App() {
             </ul>
           </section>
         </>
+      ) : null}
+
+      {payload && payload.state.pendingThree && payload.state.pendingThree.targetPlayerId === payload.yourPlayerId ? (
+        <section className="resultsOverlay" role="dialog" aria-modal="true" aria-label="Parodytas trejetas">
+          <article className="resultsDialog pendingThreeDialog">
+            <h2>
+              {payload.state.players.find((p) => p.id === payload.state.pendingThree?.showerPlayerId)?.name ?? 'Zaidejas'}{' '}
+              rodo tau trejeta!
+            </h2>
+            <div className="pendingThreeCard">{renderVisualCard(payload.state.pendingThree.card)}</div>
+            <p className="resultsSubtitle">
+              {payload.state.pendingThree.targetCanDefend
+                ? 'Gali pasiimti kruva arba atsimusti savo trejetu (tada kruva pasiima rodytojas).'
+                : 'Neturi trejeto atsimusti - teks pasiimti kruva.'}
+            </p>
+            <div className="resultsActions">
+              <button type="button" onClick={() => emitAck('respond_three', { defend: false })}>
+                Paimti kruva ({payload.state.tableStack.length})
+              </button>
+              <button
+                type="button"
+                disabled={!payload.state.pendingThree.targetCanDefend}
+                onClick={() => emitAck('respond_three', { defend: true })}
+              >
+                Atsimusti su 3
+              </button>
+            </div>
+          </article>
+        </section>
       ) : null}
 
       {me && payload?.state.phase === 'FINISHED' ? (
@@ -3447,6 +3745,15 @@ function App() {
             <p>Kai ant stalo susikaupia tiek kortu, kiek yra zaideju, stalas nusivalo ir padejes paskutine korta pradeda is naujo. Atsikrates visu kortu - baigei partija.</p>
             <h3>Fasiolas</h3>
             <p>Jei dalybu metu zaidejas padaro klaida (padeda korta sau, nors privalejo kitam, arba padeda ne pagal "+1"), kiti gali paspausti "Fasiolas!". Jei kaltinimas teisingas, visi kiti zaidejai atiduoda klaida padariusiam po viena ne virsutine savo korta - jo krova isauga.</p>
+            <h2>Kaip zaisti 999</h2>
+            <h3>Startas</h3>
+            <p>Kiekvienas zaidejas gauna 3 aklas (uzverstas) kortas, ant ju 3 atverstas (mato visi) ir 3 kortas i ranka. Pradeda atsitiktinis zaidejas, o kitame mace - praejusio maco cempionas. Po savo ejimo trauki is kalades, kol rankoje turi 3 kortas.</p>
+            <h3>Ejimas</h3>
+            <p>Dek viena ar kelias TOS PACIOS vertes kortas ant kruvos - verte turi buti lygi arba aukstesne uz virsutine (tvarka: 4, 5, 6, 8, 9, J, Q, K, A). Jei desti negali - pasiimi visa kruva i ranka.</p>
+            <h3>Magiskos kortos</h3>
+            <p>2 - dedama ant bet ko, tada dedi dar viena korta (ant 2 limpa viskas). 3 - niekada nededama i kruva: parodai ja pasirinktam zaidejui ir tas pasiima visa kruva, nebent pats turi 3 ir atsimusa - tada kruva pasiimi tu. Panaudoti trejetai isbraukiami is zaidimo. 7 - dedama kaip iprasta korta, bet kitas zaidejas privalo deti 7 ar zemesne. 10 - dedama ant bet ko, sudegina kruva (kortos isbraukiamos) ir eini dar karta.</p>
+            <h3>Pabaiga</h3>
+            <p>Rankai ir kaladei istustejus pasiimi savo atverstas kortas. Joms pasibaigus verti aklas po viena: tinka - zaidziama, netinka - pasiimi kruva ir ta korta. Laimi tie, kas pirmi atsikrato VISU kortu; paskutinis likes su kortomis pralaimi. Taskai tokie patys kaip Fasiolas.</p>
             <h3>Taskai</h3>
             <p>Registracija: +250 tasku. Kiekvienas suzaistas match: +200 visiems. Vietos bonusai: 1 vieta +200, 2 vieta +100, 3 vieta +50. Uz taskus Marketplace atrakinsi avatarus, kortu nugareles, stalus ir profilio korteles.</p>
             <div className="resultsActions">
