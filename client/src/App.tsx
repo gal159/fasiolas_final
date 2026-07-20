@@ -2876,9 +2876,6 @@ function App() {
               999
             </span>
           </button>
-          <span className="gameSwitchHint">
-            {selectedGameType === 'nnn' ? 'Naujas kambarys: 999 (iki 5 zaideju)' : 'Naujas kambarys: Fasiolas (iki 8 zaideju)'}
-          </span>
         </div>
         <div className="actions">
           <button onClick={createRoom}>Sukurti kambari</button>
