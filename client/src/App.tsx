@@ -632,6 +632,7 @@ function App() {
   const [showTableWindow, setShowTableWindow] = useState(false)
   const [showMarketplaceWindow, setShowMarketplaceWindow] = useState(false)
   const [showRules, setShowRules] = useState(false)
+  const [showMyHand, setShowMyHand] = useState(false)
   const [soundMuted, setSoundMuted] = useState(sfx.isMuted)
   const [tableScale, setTableScale] = useState(() => getStoredTableScale())
   const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null)
@@ -1154,6 +1155,12 @@ function App() {
   useEffect(() => {
     setSelectedHandIndexes([])
   }, [handSignature])
+
+  const showFasiolasContribution = Boolean(
+    payload?.state.pendingFasiolas &&
+      payload.state.pendingFasiolas.requiredFromPlayerIds.includes(payload.yourPlayerId) &&
+      !payload.state.pendingFasiolas.contributedFromPlayerIds.includes(payload.yourPlayerId),
+  )
 
   // Vibracija telefone (Android; iOS Safari vibrate API nepalaiko), kai ateina tavo eile.
   const wasMyTurnRef = useRef(false)
@@ -3125,6 +3132,16 @@ function App() {
                 {soundMuted ? 'Be garso' : 'Garsas'}
               </button>
               <button onClick={() => setShowRules(true)}>Taisykles</button>
+              {payload.state.phase === 'DEALING' ? (
+                <button
+                  type="button"
+                  onClick={() => setShowMyHand((prev) => !prev)}
+                  disabled={showFasiolasContribution}
+                  title={showFasiolasContribution ? 'Pirma atsiskaityk fasiolui' : undefined}
+                >
+                  {showMyHand ? 'Slepti kortas' : 'Mano kortos'}
+                </button>
+              ) : null}
               <button onClick={() => setShowTableWindow(false)}>Uzdaryti</button>
             </div>
             {error ? <div className="tableInlineError">{error}</div> : null}
@@ -3158,9 +3175,7 @@ function App() {
                 </div>
               ) : null}
 
-              {payload.state.pendingFasiolas &&
-              payload.state.pendingFasiolas.requiredFromPlayerIds.includes(payload.yourPlayerId) &&
-              !payload.state.pendingFasiolas.contributedFromPlayerIds.includes(payload.yourPlayerId) ? (
+              {showFasiolasContribution ? (
                 <div className="fasiolasContributionDock">
                   <strong>Atiduok korta fasiolui</strong>
                   <span>Pasirink ne virsutine korta</span>
@@ -3175,6 +3190,35 @@ function App() {
                       >
                         {renderVisualCard(card, true)}
                       </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {payload.state.phase === 'DEALING' && showMyHand && !showFasiolasContribution ? (
+                <div className="playingActionDock">
+                  <strong>Mano kortos ({payload.yourHand.length})</strong>
+                  <div className="playingActionSortRow">
+                    <button
+                      type="button"
+                      className={playingHandSortMode === 'suit' ? 'playingSortButton active' : 'playingSortButton'}
+                      onClick={() => setPlayingHandSortMode('suit')}
+                    >
+                      Rikiuoti pagal zenkla
+                    </button>
+                    <button
+                      type="button"
+                      className={playingHandSortMode === 'rank' ? 'playingSortButton active' : 'playingSortButton'}
+                      onClick={() => setPlayingHandSortMode('rank')}
+                    >
+                      Rikiuoti pagal verte
+                    </button>
+                  </div>
+                  <div className="playingActionCards">
+                    {sortedPlayingHand.map(({ card, index }) => (
+                      <div key={`my-hand-${card.rank}${card.suit}-${index}`} className="playingActionCardPick">
+                        {renderVisualCard(card, true)}
+                      </div>
                     ))}
                   </div>
                 </div>

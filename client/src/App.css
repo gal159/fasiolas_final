@@ -3175,7 +3175,7 @@ body:has(.tableWindowOverlay) {
   max-width: min(680px, 90vw);
 }
 
-.fasiolasContributionDock span {
+.fasiolasContributionDock > span {
   font-size: 12px;
   color: #c4e2fb;
 }
