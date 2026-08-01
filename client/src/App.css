@@ -3293,6 +3293,12 @@ body:has(.tableWindowOverlay) {
   max-height: 188px;
   overflow-y: auto;
   padding-right: 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.playingActionCards::-webkit-scrollbar {
+  display: none;
 }
 
 .playingActionSortRow {
