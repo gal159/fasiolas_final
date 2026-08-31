@@ -9507,3 +9507,281 @@ button.authGuest:hover:not(:disabled) {
   border-color: rgba(216, 184, 255, 0.55) !important;
   transform: none;
 }
+
+/* ============================================================
+   Lobby saraso atnaujinimas: korteles, vieno paspaudimo join,
+   inline slaptazodzio laukas. Sluoksnis failo gale - perraso
+   senesnes lobbyList taisykles ir apeina globalia mygtuku tema.
+   ============================================================ */
+
+.lobbyList {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid rgba(148, 110, 255, 0.28);
+  border-radius: 16px;
+  background: linear-gradient(165deg, rgba(26, 16, 48, 0.82), rgba(14, 9, 32, 0.88));
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.lobbyListHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.lobbyList .lobbyListHeader h3 {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #ead9ff;
+}
+
+.lobbyLivePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(126, 231, 168, 0.35);
+  background: rgba(38, 84, 58, 0.35);
+  color: #b9f0cf;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lobbyLiveDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #58e08c;
+  box-shadow: 0 0 8px rgba(88, 224, 140, 0.9);
+  animation: lobbyLivePulse 2s ease-in-out infinite;
+}
+
+@keyframes lobbyLivePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
+
+.lobbyList .lobbyListEmpty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 22px 12px;
+  margin: 0;
+  border: 1px dashed rgba(196, 158, 255, 0.3);
+  border-radius: 12px;
+  background: rgba(148, 110, 255, 0.06);
+  color: #c9b6ef;
+  text-align: center;
+}
+
+.lobbyList .lobbyListEmpty p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.lobbyEmptyIcon {
+  font-size: 30px;
+  opacity: 0.85;
+}
+
+.lobbyList .lobbyListRows {
+  list-style: none;
+  margin: 0;
+  padding: 2px;
+  display: grid;
+  gap: 10px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.lobbyCard {
+  border: 1px solid rgba(196, 158, 255, 0.22);
+  border-radius: 14px;
+  background: linear-gradient(170deg, rgba(44, 28, 78, 0.65), rgba(24, 15, 48, 0.75));
+  padding: 11px 14px;
+  transition: transform 0.14s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.lobbyCard:hover {
+  transform: translateY(-2px);
+  border-color: rgba(216, 184, 255, 0.5);
+  box-shadow: 0 10px 24px rgba(80, 40, 160, 0.35);
+}
+
+.lobbyCard.unlocking {
+  border-color: rgba(255, 205, 130, 0.55);
+  box-shadow: 0 10px 24px rgba(240, 138, 29, 0.25);
+}
+
+.lobbyCardMain {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.lobbyCardInfo {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lobbyCardHost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 800;
+  font-size: 15px;
+  color: #f6edff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lobbyLockIcon {
+  font-size: 13px;
+  filter: drop-shadow(0 0 4px rgba(255, 205, 130, 0.55));
+}
+
+.lobbyCardCode {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #a68fd8;
+}
+
+.lobbySeatsPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(126, 231, 168, 0.4);
+  background: rgba(38, 84, 58, 0.4);
+  color: #b9f0cf;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.lobbySeatsPill.warm {
+  border-color: rgba(255, 205, 130, 0.45);
+  background: rgba(96, 66, 22, 0.45);
+  color: #ffd9a0;
+}
+
+.lobbySeatsPill.full {
+  border-color: rgba(255, 128, 128, 0.4);
+  background: rgba(96, 30, 30, 0.45);
+  color: #ffb3b3;
+}
+
+/* Opt-out is globalios mygtukas.png temos lobby mygtukams */
+.lobbyList button::before {
+  display: none;
+}
+
+button.lobbyJoinBtn {
+  padding: 9px 20px;
+  border-radius: 11px;
+  border: 1px solid rgba(126, 231, 168, 0.55) !important;
+  background: linear-gradient(180deg, #4fd483, #27a35a 60%, #1d8a4a) !important;
+  color: #06210f !important;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-shadow: none;
+  box-shadow: 0 8px 18px rgba(39, 163, 90, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+  transition: transform 0.12s ease, box-shadow 0.18s ease, filter 0.18s ease;
+  white-space: nowrap;
+}
+
+button.lobbyJoinBtn:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 22px rgba(39, 163, 90, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+}
+
+button.lobbyJoinBtn:disabled {
+  background: linear-gradient(180deg, #5a5468, #443f52) !important;
+  border-color: rgba(196, 158, 255, 0.2) !important;
+  color: #b6aecb !important;
+  box-shadow: none !important;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.lobbyUnlockRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  margin-top: 11px;
+  padding-top: 11px;
+  border-top: 1px solid rgba(255, 205, 130, 0.25);
+  animation: lobbyUnlockIn 0.18s ease-out;
+}
+
+@keyframes lobbyUnlockIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.lobbyUnlockRow input {
+  width: 100%;
+  padding: 9px 13px;
+  border-radius: 11px;
+  border: 1px solid rgba(255, 205, 130, 0.4);
+  background: rgba(12, 8, 26, 0.75);
+  color: #ffeecf;
+  font-size: 14px;
+}
+
+.lobbyUnlockRow input:focus {
+  outline: none;
+  border-color: rgba(255, 205, 130, 0.75);
+  box-shadow: 0 0 0 3px rgba(255, 182, 72, 0.18);
+}
+
+.lobbyCardError {
+  margin: 9px 0 0;
+  padding: 7px 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 128, 128, 0.4);
+  background: rgba(96, 30, 30, 0.4);
+  color: #ffc4c4;
+  font-size: 13px;
+}
+
+@media (max-width: 720px) {
+  .lobbyCardMain {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .lobbyCardMain .lobbyGameBadge {
+    order: 3;
+  }
+
+  .lobbyCardMain .lobbySeatsPill {
+    order: 4;
+  }
+
+  .lobbyCardMain button.lobbyJoinBtn {
+    order: 5;
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .lobbyUnlockRow {
+    grid-template-columns: 1fr;
+  }
+
+  .lobbyUnlockRow button.lobbyJoinBtn {
+    width: 100%;
+  }
+}

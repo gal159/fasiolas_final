@@ -631,6 +631,10 @@ function App() {
   // Socket effect'ui (mount'inamas viena karta) reikia gyvu reiksmiu rejoin'ui.
   const rejoinRef = useRef({ roomCode: '', name: '' })
   const [lobbies, setLobbies] = useState<LobbySummary[]>([])
+  // Inline slaptazodzio ivedimas uzrakintam lobby kambariui + klaidos prie saraso.
+  const [unlockingRoomCode, setUnlockingRoomCode] = useState('')
+  const [lobbyPasswordInput, setLobbyPasswordInput] = useState('')
+  const [lobbyError, setLobbyError] = useState('')
   const [isGuest, setIsGuest] = useState(false)
   const [inviteCopied, setInviteCopied] = useState(false)
   const [showLeaderboard, setShowLeaderboard] = useState(false)
@@ -1423,6 +1427,7 @@ function App() {
     event: string,
     request: TReq,
     onOk?: (response: any) => void,
+    onError?: (message: string) => void,
   ): void {
     if (!socket) {
       return
@@ -1430,7 +1435,12 @@ function App() {
     setError('')
     socket.emit(event, request, (response: { ok: boolean; error?: string; roomCode?: string }) => {
       if (!response?.ok) {
-        setError(response?.error ?? 'Server error')
+        const message = response?.error ?? 'Server error'
+        if (onError) {
+          onError(message)
+        } else {
+          setError(message)
+        }
         return
       }
       onOk?.(response)
@@ -1601,16 +1611,28 @@ function App() {
     )
   }
 
-  function joinRoom(codeOverride?: string, requiresPassword = false): void {
+  function joinRoom(codeOverride?: string, requiresPassword = false, options?: { password?: string; fromLobby?: boolean }): void {
     const normalized = (codeOverride ?? roomCodeInput).trim().toUpperCase()
+    const reportError = options?.fromLobby ? setLobbyError : setError
     if (!normalized) {
-      setError('Ivesk kambario koda')
+      reportError('Ivesk kambario koda')
       return
     }
-    if (requiresPassword && !roomPasswordInput.trim()) {
+    const password = (options?.password ?? roomPasswordInput).trim()
+    if (requiresPassword && !password) {
+      if (options?.fromLobby) {
+        // Issiskleidzia inline slaptazodzio laukas prie kambario korteles.
+        setUnlockingRoomCode(normalized)
+        setLobbyPasswordInput('')
+        setLobbyError('')
+        return
+      }
       setRoomCodeInput(normalized)
       setError('Kambarys apsaugotas: ivesk slaptazodi laukelyje "Slaptazodis"')
       return
+    }
+    if (options?.fromLobby) {
+      setLobbyError('')
     }
     const existingPlayerId = sessionStorage.getItem(playerStorageKey(normalized)) ?? undefined
     emitAck(
@@ -1621,16 +1643,20 @@ function App() {
         authUserId: getStoredAuthUserId(),
         sessionToken: getStoredSessionToken(),
         existingPlayerId,
-        password: roomPasswordInput.trim() || undefined,
+        password: password || undefined,
         profile: withSlot(profileDraft, activeProfileSlot),
       },
       (response) => {
         setRoomCode(normalized)
         setRoomCodeInput(normalized)
+        setUnlockingRoomCode('')
+        setLobbyPasswordInput('')
+        setLobbyError('')
         sessionStorage.setItem(playerStorageKey(normalized), String(response.playerId))
         refreshAccount()
         refreshShopCatalog()
       },
+      options?.fromLobby ? (message) => setLobbyError(message) : undefined,
     )
   }
 
@@ -3118,27 +3144,90 @@ function App() {
 
             {!roomCode ? (
           <div className="lobbyList" aria-label="Aktyvus kambariai">
-            <h3>Aktyvus kambariai</h3>
+            <div className="lobbyListHeader">
+              <h3>Aktyvus kambariai</h3>
+              <span className="lobbyLivePill" title="Sarasas atsinaujina automatiskai">
+                <span className="lobbyLiveDot" aria-hidden="true" />
+                {lobbies.length === 1 ? '1 kambarys' : `${lobbies.length} kambariai`}
+              </span>
+            </div>
             {lobbies.length === 0 ? (
-              <p className="lobbyListEmpty">Siuo metu atviru kambariu nera. Sukurk sava!</p>
+              <div className="lobbyListEmpty">
+                <span className="lobbyEmptyIcon" aria-hidden="true">&#127183;</span>
+                <p>Siuo metu atviru kambariu nera. Sukurk sava!</p>
+              </div>
             ) : (
               <ul className="lobbyListRows">
-                {lobbies.map((lobby) => (
-                  <li key={lobby.roomCode} className="lobbyListRow">
-                    <span className="lobbyListHost">{lobby.hostName}</span>
-                    <span className={(lobby.gameType ?? 'fasiolas') === 'nnn' ? 'lobbyGameBadge nnn' : 'lobbyGameBadge'}>
-                      {GAME_TYPE_LABELS[lobby.gameType ?? 'fasiolas']}
-                    </span>
-                    <span className="lobbyListMeta">
-                      Kodas: {lobby.roomCode} | Zaidejai: {lobby.playerCount}/{GAME_TYPE_MAX_PLAYERS[lobby.gameType ?? 'fasiolas']}{lobby.hasPassword ? ' | Uzrakintas' : ''}
-                    </span>
-                    <button type="button" onClick={() => joinRoom(lobby.roomCode, lobby.hasPassword)}>
-                      {lobby.hasPassword ? 'Jungtis su slaptazodziu' : 'Jungtis'}
-                    </button>
-                  </li>
-                ))}
+                {lobbies.map((lobby) => {
+                  const gameType = lobby.gameType ?? 'fasiolas'
+                  const maxPlayers = GAME_TYPE_MAX_PLAYERS[gameType]
+                  const isFull = lobby.playerCount >= maxPlayers
+                  const isUnlocking = unlockingRoomCode === lobby.roomCode
+                  const seatsClass = isFull ? 'lobbySeatsPill full' : lobby.playerCount >= maxPlayers - 1 ? 'lobbySeatsPill warm' : 'lobbySeatsPill'
+                  return (
+                    <li key={lobby.roomCode} className={isUnlocking ? 'lobbyCard unlocking' : 'lobbyCard'}>
+                      <div className="lobbyCardMain">
+                        <div className="lobbyCardInfo">
+                          <span className="lobbyCardHost">
+                            {lobby.hasPassword ? (
+                              <span className="lobbyLockIcon" title="Kambarys apsaugotas slaptazodziu" aria-label="Uzrakintas">&#128274;</span>
+                            ) : null}
+                            {lobby.hostName}
+                          </span>
+                          <span className="lobbyCardCode">#{lobby.roomCode}</span>
+                        </div>
+                        <span className={gameType === 'nnn' ? 'lobbyGameBadge nnn' : 'lobbyGameBadge'}>
+                          {GAME_TYPE_LABELS[gameType]}
+                        </span>
+                        <span className={seatsClass} aria-label={`Zaidejai: ${lobby.playerCount} is ${maxPlayers}`}>
+                          <span aria-hidden="true">&#128101;</span> {lobby.playerCount}/{maxPlayers}
+                        </span>
+                        <button
+                          type="button"
+                          className="lobbyJoinBtn"
+                          disabled={isFull}
+                          onClick={() => {
+                            if (isFull) return
+                            if (lobby.hasPassword) {
+                              setUnlockingRoomCode(isUnlocking ? '' : lobby.roomCode)
+                              setLobbyPasswordInput('')
+                              setLobbyError('')
+                            } else {
+                              joinRoom(lobby.roomCode, false, { fromLobby: true })
+                            }
+                          }}
+                        >
+                          {isFull ? 'Pilnas' : 'Jungtis'}
+                        </button>
+                      </div>
+                      {isUnlocking ? (
+                        <form
+                          className="lobbyUnlockRow"
+                          onSubmit={(event) => {
+                            event.preventDefault()
+                            joinRoom(lobby.roomCode, true, { password: lobbyPasswordInput, fromLobby: true })
+                          }}
+                        >
+                          <input
+                            autoFocus
+                            type="password"
+                            value={lobbyPasswordInput}
+                            onChange={(event) => setLobbyPasswordInput(event.target.value)}
+                            placeholder="Kambario slaptazodis"
+                            aria-label="Kambario slaptazodis"
+                          />
+                          <button type="submit" className="lobbyJoinBtn" disabled={!lobbyPasswordInput.trim()}>
+                            Prisijungti
+                          </button>
+                        </form>
+                      ) : null}
+                      {isUnlocking && lobbyError ? <p className="lobbyCardError">{lobbyError}</p> : null}
+                    </li>
+                  )
+                })}
               </ul>
             )}
+            {lobbyError && !unlockingRoomCode ? <p className="lobbyCardError">{lobbyError}</p> : null}
           </div>
             ) : null}
           </div>
