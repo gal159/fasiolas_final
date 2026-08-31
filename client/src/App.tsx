@@ -605,6 +605,8 @@ function App() {
   const [registerPlayerName, setRegisterPlayerName] = useState('')
   const [loginError, setLoginError] = useState('')
   const [loginInfo, setLoginInfo] = useState('')
+  const [authPending, setAuthPending] = useState(false)
+  const [showAuthPassword, setShowAuthPassword] = useState(false)
   const [resetToken, setResetToken] = useState('')
   const [socket, setSocket] = useState<Socket | null>(null)
   const [name, setName] = useState('')
@@ -2435,6 +2437,7 @@ function App() {
   }
 
   async function handleLogin(): Promise<void> {
+    if (authPending) return
     const email = loginUsername.trim().toLowerCase()
     const password = loginPassword.trim()
     setLoginInfo('')
@@ -2444,6 +2447,7 @@ function App() {
       return
     }
 
+    setAuthPending(true)
     try {
       const response = await fetch(`${SERVER_URL}/auth/login`, {
         method: 'POST',
@@ -2459,10 +2463,13 @@ function App() {
       applyAuthBootstrap(payload as AuthBootstrapPayload)
     } catch {
       setLoginError('Serveris nepasiekiamas. Patikrink ar paleistas backend.')
+    } finally {
+      setAuthPending(false)
     }
   }
 
   async function handleRegister(): Promise<void> {
+    if (authPending) return
     const email = loginUsername.trim().toLowerCase()
     const password = loginPassword.trim()
     const confirm = registerConfirmPassword.trim()
@@ -2471,6 +2478,11 @@ function App() {
     if (!email || !password) {
       setLoginInfo('')
       setLoginError('Ivesk el. pasta ir slaptazodi registracijai')
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setLoginInfo('')
+      setLoginError('Ivesk teisinga el. pasto adresa')
       return
     }
     if (password.length < 8) {
@@ -2488,7 +2500,13 @@ function App() {
       setLoginError('Ivesk zaidimo varda')
       return
     }
+    if (playerName.length < 2) {
+      setLoginInfo('')
+      setLoginError('Zaidimo vardas turi buti bent 2 simboliu')
+      return
+    }
 
+    setAuthPending(true)
     try {
       const response = await fetch(`${SERVER_URL}/auth/register`, {
         method: 'POST',
@@ -2519,10 +2537,13 @@ function App() {
     } catch {
       setLoginInfo('')
       setLoginError('Serveris nepasiekiamas. Patikrink ar paleistas backend.')
+    } finally {
+      setAuthPending(false)
     }
   }
 
   async function handleForgotPassword(): Promise<void> {
+    if (authPending) return
     const email = loginUsername.trim().toLowerCase()
     setLoginError('')
     setLoginInfo('')
@@ -2531,7 +2552,12 @@ function App() {
       setLoginError('Ivesk el. pasta')
       return
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setLoginError('Ivesk teisinga el. pasto adresa')
+      return
+    }
 
+    setAuthPending(true)
     try {
       const response = await fetch(`${SERVER_URL}/auth/forgot-password`, {
         method: 'POST',
@@ -2557,10 +2583,13 @@ function App() {
       )
     } catch {
       setLoginError('Serveris nepasiekiamas. Patikrink ar paleistas backend.')
+    } finally {
+      setAuthPending(false)
     }
   }
 
   async function handleResetPassword(): Promise<void> {
+    if (authPending) return
     const password = loginPassword.trim()
     const confirm = confirmPassword.trim()
 
@@ -2580,6 +2609,7 @@ function App() {
       return
     }
 
+    setAuthPending(true)
     try {
       const response = await fetch(`${SERVER_URL}/auth/reset-password`, {
         method: 'POST',
@@ -2607,6 +2637,8 @@ function App() {
       setLoginInfo(payload.message ?? 'Slaptazodis pakeistas. Dabar galite prisijungti.')
     } catch {
       setLoginError('Serveris nepasiekiamas. Patikrink ar paleistas backend.')
+    } finally {
+      setAuthPending(false)
     }
   }
 
@@ -2670,125 +2702,195 @@ function App() {
   }
 
   if (appStage === 'auth') {
+    const authTitle =
+      authMode === 'login'
+        ? 'Sveikas sugrizes!'
+        : authMode === 'register'
+          ? 'Sukurk paskyra'
+          : authMode === 'forgot'
+            ? 'Slaptazodzio atstatymas'
+            : 'Naujas slaptazodis'
+    const authSubtitle =
+      authMode === 'login'
+        ? 'Prisijunk el. pastu arba zaidimo vardu.'
+        : authMode === 'register'
+          ? 'Registracija nemokama - gausi 250 starterio tasku.'
+          : authMode === 'forgot'
+            ? 'Ivesk el. pasta ir atsiusime atstatymo nuoroda.'
+            : 'Sugalvok nauja slaptazodi savo paskyrai.'
+    const submitLabel =
+      authMode === 'login'
+        ? authPending ? 'Jungiamasi...' : 'Prisijungti'
+        : authMode === 'register'
+          ? authPending ? 'Kuriama...' : 'Sukurti paskyra'
+          : authMode === 'forgot'
+            ? authPending ? 'Siunciama...' : 'Siusti atstatymo nuoroda'
+            : authPending ? 'Atnaujinama...' : 'Atnaujinti slaptazodi'
+    const switchAuthMode = (mode: 'login' | 'register' | 'forgot'): void => {
+      setAuthMode(mode)
+      if (mode === 'forgot') {
+        setLoginPassword('')
+      }
+      setRegisterConfirmPassword('')
+      setRegisterPlayerName('')
+      setConfirmPassword('')
+      setShowAuthPassword(false)
+      setLoginInfo('')
+      setLoginError('')
+    }
+    const handleAuthSubmit = (event: React.FormEvent<HTMLFormElement>): void => {
+      event.preventDefault()
+      if (authPending) return
+      if (authMode === 'login') void handleLogin()
+      else if (authMode === 'register') void handleRegister()
+      else if (authMode === 'forgot') void handleForgotPassword()
+      else void handleResetPassword()
+    }
+    const eyeIcon = showAuthPassword ? (
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+        <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+        <line x1="1" y1="1" x2="23" y2="23" />
+      </svg>
+    ) : (
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    )
     return (
       <div className="page authPage">
-        <section className="panel loginPanel">
-          <h1>Prisijungimas</h1>
-          <p className="loginHint">Prisijungti gali el. pastu arba zaidimo vardu. El. pastas reikalingas slaptazodzio atstatymui.</p>
-          <div className="row">
-            <label htmlFor="login-name">{authMode === 'login' ? 'El. pastas arba vardas' : 'El. pastas'}</label>
-            <input
-              id="login-name"
-              value={loginUsername}
-              onChange={(event) => setLoginUsername(event.target.value)}
-              placeholder={authMode === 'login' ? 'Ivesk el. pasta arba zaidimo varda' : 'Ivesk el. pasta'}
-            />
+        <section className="authCard">
+          <div className="authBrand">
+            <span className="authLogoText">Fasiolas</span>
+            <span className="authTagline">Realaus laiko kortu zaidimai</span>
           </div>
-          {authMode !== 'forgot' ? (
-            <div className="row">
-              <label htmlFor="login-password">Slaptazodis</label>
-              <input
-                id="login-password"
-                type="password"
-                value={loginPassword}
-                onChange={(event) => setLoginPassword(event.target.value)}
-                placeholder={authMode === 'reset' ? 'Naujas slaptazodis' : 'Ivesk slaptazodi'}
-              />
+          {authMode === 'login' || authMode === 'register' ? (
+            <div className="authTabs" role="tablist" aria-label="Prisijungimo rezimas">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={authMode === 'login'}
+                className={authMode === 'login' ? 'authTab active' : 'authTab'}
+                onClick={() => switchAuthMode('login')}
+              >
+                Prisijungti
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={authMode === 'register'}
+                className={authMode === 'register' ? 'authTab active' : 'authTab'}
+                onClick={() => switchAuthMode('register')}
+              >
+                Registruotis
+              </button>
             </div>
           ) : null}
-          {authMode === 'register' ? (
-            <>
-              <div className="row">
-                <label htmlFor="register-confirm-password">Pakartok slaptazodi</label>
+          <h1 className="authTitle">{authTitle}</h1>
+          <p className="authSubtitle">{authSubtitle}</p>
+          <form className="authForm" onSubmit={handleAuthSubmit}>
+            {authMode !== 'reset' ? (
+              <div className="authField">
+                <label htmlFor="login-name">{authMode === 'login' ? 'El. pastas arba vardas' : 'El. pastas'}</label>
                 <input
-                  id="register-confirm-password"
-                  type="password"
-                  value={registerConfirmPassword}
-                  onChange={(event) => setRegisterConfirmPassword(event.target.value)}
+                  id="login-name"
+                  autoComplete={authMode === 'login' ? 'username' : 'email'}
+                  value={loginUsername}
+                  onChange={(event) => setLoginUsername(event.target.value)}
+                  placeholder={authMode === 'login' ? 'vardas arba el. pastas' : 'tavo@pastas.lt'}
+                />
+              </div>
+            ) : null}
+            {authMode !== 'forgot' ? (
+              <div className="authField">
+                <div className="authFieldLabelRow">
+                  <label htmlFor="login-password">{authMode === 'reset' ? 'Naujas slaptazodis' : 'Slaptazodis'}</label>
+                  {authMode === 'login' ? (
+                    <button type="button" className="authLink" onClick={() => switchAuthMode('forgot')}>
+                      Pamirsai slaptazodi?
+                    </button>
+                  ) : null}
+                </div>
+                <div className="authPasswordWrap">
+                  <input
+                    id="login-password"
+                    type={showAuthPassword ? 'text' : 'password'}
+                    autoComplete={authMode === 'login' ? 'current-password' : 'new-password'}
+                    value={loginPassword}
+                    onChange={(event) => setLoginPassword(event.target.value)}
+                    placeholder={authMode === 'reset' ? 'Naujas slaptazodis' : 'Ivesk slaptazodi'}
+                  />
+                  <button
+                    type="button"
+                    className="authEye"
+                    onClick={() => setShowAuthPassword((visible) => !visible)}
+                    aria-label={showAuthPassword ? 'Slepti slaptazodi' : 'Rodyti slaptazodi'}
+                  >
+                    {eyeIcon}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            {authMode === 'register' ? (
+              <>
+                <div className="authField">
+                  <label htmlFor="register-confirm-password">Pakartok slaptazodi</label>
+                  <input
+                    id="register-confirm-password"
+                    type={showAuthPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    value={registerConfirmPassword}
+                    onChange={(event) => setRegisterConfirmPassword(event.target.value)}
+                    placeholder="Pakartok slaptazodi"
+                  />
+                </div>
+                <div className="authField">
+                  <label htmlFor="register-player-name">Zaidimo vardas</label>
+                  <input
+                    id="register-player-name"
+                    autoComplete="nickname"
+                    value={registerPlayerName}
+                    onChange={(event) => setRegisterPlayerName(event.target.value)}
+                    placeholder="Kaip tave matys kiti zaidejai"
+                  />
+                </div>
+              </>
+            ) : null}
+            {authMode === 'reset' ? (
+              <div className="authField">
+                <label htmlFor="confirm-password">Pakartok slaptazodi</label>
+                <input
+                  id="confirm-password"
+                  type={showAuthPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
                   placeholder="Pakartok slaptazodi"
                 />
               </div>
-              <div className="row">
-                <label htmlFor="register-player-name">Zaidimo vardas</label>
-                <input
-                  id="register-player-name"
-                  value={registerPlayerName}
-                  onChange={(event) => setRegisterPlayerName(event.target.value)}
-                  placeholder="Ivesk zaidimo varda"
-                />
-              </div>
-            </>
-          ) : null}
-          {authMode === 'reset' ? (
-            <div className="row">
-              <label htmlFor="confirm-password">Pakartok slaptazodi</label>
-              <input
-                id="confirm-password"
-                type="password"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                placeholder="Pakartok slaptazodi"
-              />
-            </div>
-          ) : null}
-          <div className="actions">
-            {authMode === 'login' ? <button type="button" onClick={handleLogin}>Prisijungti</button> : null}
-            {authMode === 'register' ? <button type="button" onClick={handleRegister}>Registruotis</button> : null}
-            {authMode === 'forgot' ? <button type="button" onClick={handleForgotPassword}>Siusti reset nuoroda</button> : null}
-            {authMode === 'reset' ? <button type="button" onClick={handleResetPassword}>Atnaujinti slaptazodi</button> : null}
-
-            {authMode !== 'register' ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode('register')
-                  setRegisterConfirmPassword('')
-                  setRegisterPlayerName('')
-                  setLoginInfo('')
-                  setLoginError('')
-                }}
-              >
-                Kurti paskyra
-              </button>
             ) : null}
-            {authMode !== 'forgot' ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode('forgot')
-                  setLoginPassword('')
-                  setConfirmPassword('')
-                  setLoginInfo('')
-                  setLoginError('')
-                }}
-              >
-                Pamirsau slaptazodi
-              </button>
-            ) : null}
-            {authMode !== 'login' ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode('login')
-                  setRegisterConfirmPassword('')
-                  setRegisterPlayerName('')
-                  setConfirmPassword('')
-                  setLoginInfo('')
-                  setLoginError('')
-                }}
-              >
-                Grizti i prisijungima
-              </button>
-            ) : null}
-            <button type="button" className="guestPlayButton" onClick={startGuestSession}>
-              Zaisti be paskyros
+            {loginInfo ? <div className="authMessage authMessageSuccess">{loginInfo}</div> : null}
+            {loginError ? <div className="authMessage authMessageError">{loginError}</div> : null}
+            <button type="submit" className="authSubmit" disabled={authPending}>
+              {submitLabel}
             </button>
-          </div>
-          {roomCodeInput ? (
-            <p className="loginHint">Turi kvietima i kambari {roomCodeInput} - gali zaisti ir be paskyros.</p>
+          </form>
+          {authMode === 'forgot' || authMode === 'reset' ? (
+            <button type="button" className="authLink authBackLink" onClick={() => switchAuthMode('login')}>
+              Grizti i prisijungima
+            </button>
           ) : null}
-          {loginInfo ? <div className="success">{loginInfo}</div> : null}
-          {loginError ? <div className="error">{loginError}</div> : null}
+          <div className="authDivider">
+            <span>arba</span>
+          </div>
+          <button type="button" className="authGuest" onClick={startGuestSession}>
+            Zaisti be paskyros
+          </button>
+          {roomCodeInput ? (
+            <p className="authInviteHint">Turi kvietima i kambari {roomCodeInput} - gali zaisti ir be paskyros.</p>
+          ) : null}
         </section>
       </div>
     )

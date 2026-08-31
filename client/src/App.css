@@ -9095,3 +9095,415 @@ header.profileOnboardingHeader {
     border-left: 0;
   }
 }
+
+
+/* ============================================================
+   Modernus auth (login/register/forgot/reset) puslapis.
+   Naujas sluoksnis - perraso senesnius .page.authPage stilius.
+   ============================================================ */
+
+.page.authPage {
+  min-height: 100dvh;
+  padding: 24px 16px !important;
+}
+
+.authCard {
+  width: min(420px, 94vw);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 28px 28px 24px;
+  border-radius: 22px;
+  background: linear-gradient(170deg, rgba(24, 16, 46, 0.82), rgba(12, 8, 28, 0.88));
+  border: 1px solid rgba(196, 158, 255, 0.32);
+  box-shadow:
+    0 30px 70px rgba(2, 0, 14, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  color: #f1e6ff;
+  animation: authCardIn 0.45s cubic-bezier(0.2, 0.8, 0.25, 1);
+}
+
+@keyframes authCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.authBrand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 14px;
+}
+
+.authLogoText {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: linear-gradient(120deg, #ffd98a 0%, #ffb15c 38%, #e9a0ff 78%, #9a7bff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 2px 10px rgba(178, 130, 255, 0.35));
+}
+
+.authTagline {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #b9a4e6;
+}
+
+.authTabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: rgba(10, 6, 24, 0.65);
+  border: 1px solid rgba(196, 158, 255, 0.18);
+  margin-bottom: 14px;
+}
+
+button.authTab {
+  border: 0;
+  border-radius: 10px;
+  padding: 9px 10px;
+  background: transparent;
+  color: #b9a4e6;
+  font-weight: 700;
+  box-shadow: none;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+button.authTab:hover:not(:disabled) {
+  filter: none;
+  color: #ead9ff;
+}
+
+button.authTab.active {
+  background: linear-gradient(180deg, rgba(148, 110, 255, 0.85), rgba(104, 66, 220, 0.9));
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(104, 66, 220, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.authTitle {
+  margin: 0 0 2px;
+  font-size: 22px;
+  color: #f8ecff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+.authSubtitle {
+  margin: 0 0 16px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: #c3aeee;
+}
+
+.authForm {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.authField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.authField label {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #d9c8fb;
+}
+
+.authFieldLabelRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.authField input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 15px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid rgba(196, 158, 255, 0.28);
+  background: rgba(10, 6, 24, 0.6);
+  color: #f4ecff;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.authField input::placeholder {
+  color: #8d7ab5;
+}
+
+.authField input:focus {
+  outline: none;
+  border-color: rgba(178, 130, 255, 0.8);
+  box-shadow: 0 0 0 3px rgba(148, 110, 255, 0.22);
+  background: rgba(14, 9, 32, 0.75);
+}
+
+.authPasswordWrap {
+  position: relative;
+}
+
+.authPasswordWrap input {
+  padding-right: 44px;
+}
+
+button.authEye {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #a68fd6;
+  box-shadow: none;
+}
+
+button.authEye:hover:not(:disabled) {
+  filter: none;
+  color: #ead9ff;
+  background: rgba(148, 110, 255, 0.16);
+}
+
+button.authLink {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #c9a6ff;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button.authLink:hover:not(:disabled) {
+  filter: none;
+  color: #e6d2ff;
+  text-decoration: underline;
+}
+
+button.authBackLink {
+  align-self: center;
+  margin-top: 12px;
+  font-size: 13.5px;
+}
+
+button.authSubmit {
+  margin-top: 3px;
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 205, 130, 0.55);
+  background: linear-gradient(180deg, #ffb648, #f08a1d 55%, #d9740f);
+  color: #2b1500;
+  font-size: 15.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  box-shadow: 0 10px 24px rgba(240, 138, 29, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: transform 0.12s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+
+button.authSubmit:hover:not(:disabled) {
+  filter: brightness(1.06) saturate(1.05);
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(240, 138, 29, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+button.authSubmit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+button.authSubmit:disabled {
+  background: linear-gradient(180deg, #8b7a5c, #6f6049);
+  border-color: rgba(255, 224, 178, 0.25);
+  color: #d9cdb8;
+  box-shadow: none;
+  cursor: progress;
+}
+
+.authMessage {
+  border-radius: 11px;
+  padding: 10px 13px;
+  font-size: 13.5px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.authMessageError {
+  background: rgba(180, 40, 48, 0.22);
+  border: 1px solid rgba(255, 120, 120, 0.45);
+  color: #ffb4b4;
+}
+
+.authMessageSuccess {
+  background: rgba(38, 150, 92, 0.2);
+  border: 1px solid rgba(110, 235, 165, 0.4);
+  color: #a9f5cd;
+}
+
+.authDivider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 12px;
+  color: #8d7ab5;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.authDivider::before,
+.authDivider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(196, 158, 255, 0.35), transparent);
+}
+
+button.authGuest {
+  width: 100%;
+  padding: 11px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(196, 158, 255, 0.35);
+  background: rgba(148, 110, 255, 0.12);
+  color: #e2d3ff;
+  font-weight: 700;
+  box-shadow: none;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+button.authGuest:hover:not(:disabled) {
+  filter: none;
+  background: rgba(148, 110, 255, 0.22);
+  border-color: rgba(216, 184, 255, 0.55);
+}
+
+.authInviteHint {
+  margin: 12px 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: #c3aeee;
+}
+
+@media (max-width: 480px) {
+  .authCard {
+    padding: 22px 18px 18px;
+  }
+
+  .authLogoText {
+    font-size: 26px;
+  }
+}
+
+/* Auth mygtukai atsisako globalios mygtukas.png temos (7725 eil. sluoksnis
+   naudoja !important, tad cia irgi reikia !important + velesnes pozicijos). */
+.authCard button::before {
+  display: none;
+}
+
+.authCard button {
+  text-shadow: none;
+}
+
+button.authTab {
+  border: 0 !important;
+  background: transparent !important;
+  color: #b9a4e6 !important;
+  box-shadow: none !important;
+}
+
+button.authTab:hover:not(:disabled) {
+  color: #ead9ff !important;
+  transform: none;
+}
+
+button.authTab.active {
+  background: linear-gradient(180deg, rgba(148, 110, 255, 0.85), rgba(104, 66, 220, 0.9)) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(104, 66, 220, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+}
+
+button.authEye {
+  border: 0 !important;
+  background: transparent !important;
+  color: #a68fd6 !important;
+  box-shadow: none !important;
+}
+
+button.authEye:hover:not(:disabled) {
+  background: rgba(148, 110, 255, 0.16) !important;
+  color: #ead9ff !important;
+  transform: none;
+}
+
+button.authLink {
+  border: 0 !important;
+  background: transparent !important;
+  color: #c9a6ff !important;
+  box-shadow: none !important;
+}
+
+button.authLink:hover:not(:disabled) {
+  color: #e6d2ff !important;
+  transform: none;
+}
+
+button.authSubmit {
+  border: 1px solid rgba(255, 205, 130, 0.55) !important;
+  background: linear-gradient(180deg, #ffb648, #f08a1d 55%, #d9740f) !important;
+  color: #2b1500 !important;
+  box-shadow: 0 10px 24px rgba(240, 138, 29, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
+}
+
+button.authSubmit:hover:not(:disabled) {
+  box-shadow: 0 14px 28px rgba(240, 138, 29, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
+}
+
+button.authSubmit:disabled {
+  background: linear-gradient(180deg, #8b7a5c, #6f6049) !important;
+  border-color: rgba(255, 224, 178, 0.25) !important;
+  color: #d9cdb8 !important;
+  opacity: 1;
+  cursor: progress;
+}
+
+button.authGuest {
+  border: 1px solid rgba(196, 158, 255, 0.35) !important;
+  background: rgba(148, 110, 255, 0.12) !important;
+  color: #e2d3ff !important;
+  box-shadow: none !important;
+}
+
+button.authGuest:hover:not(:disabled) {
+  background: rgba(148, 110, 255, 0.22) !important;
+  border-color: rgba(216, 184, 255, 0.55) !important;
+  transform: none;
+}

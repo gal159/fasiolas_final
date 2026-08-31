@@ -106,6 +106,10 @@ Repo turi `render.yaml` (Blueprint) su paruosta konfiguracija.
      be jo naudojamas NeDB failas pastoviame diske `/var/data`)
    - `CLIENT_URL` ir `ALLOWED_ORIGINS` — jau nustatyti i
      `https://lediniaisprendimai.com`, keisk jei kita domena
+   - `RESEND_API_KEY` — Resend API raktas slaptazodzio atstatymo laiskams
+     (be jo laiskai nesiunciami)
+   - `MAIL_FROM` — siuntejo adresas is Resend verifikuoto domeno,
+     pvz. `Fasiolas <noreply@lediniaisprendimai.com>`
 3. Patikra: `https://<service>.onrender.com/health` -> `{ "ok": true }`
 
 Pastaba: Render free plane Shell neprieinamas — produkcijos duomenis
