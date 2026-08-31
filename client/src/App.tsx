@@ -38,6 +38,7 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001'
 const PROFILE_SLOTS_STORAGE_KEY = 'fasiolas:profile-slots'
 const LOGIN_SESSION_STORAGE_KEY = 'fasiolas:logged-in'
 const AUTH_USER_ID_STORAGE_KEY = 'fasiolas:auth-user-id'
+const SESSION_TOKEN_STORAGE_KEY = 'fasiolas:session-token'
 const RESET_TOKEN_QUERY_KEY = 'resetToken'
 const TABLE_SCALE_STORAGE_KEY = 'fasiolas:table-scale'
 const TABLE_SCALE_MIN = 0.75
@@ -239,6 +240,19 @@ function playerStorageKey(roomCode: string): string {
 function getStoredAuthUserId(): string | undefined {
   const value = sessionStorage.getItem(AUTH_USER_ID_STORAGE_KEY)?.trim()
   return value ? value : undefined
+}
+
+function getStoredSessionToken(): string | undefined {
+  const value = sessionStorage.getItem(SESSION_TOKEN_STORAGE_KEY)?.trim()
+  return value ? value : undefined
+}
+
+// Authorization headeris apsaugotiems /auth/* endpointams.
+function authHeaders(): Record<string, string> {
+  const token = getStoredSessionToken()
+  return token
+    ? { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+    : { 'Content-Type': 'application/json' }
 }
 
 function clampTableScale(value: number): number {
@@ -683,6 +697,10 @@ function App() {
     if (bootstrap.userId) {
       sessionStorage.setItem(AUTH_USER_ID_STORAGE_KEY, bootstrap.userId)
     }
+    // Sesijos tokenas grazinamas tik login metu - bootstrap jo neatnaujina.
+    if (bootstrap.sessionToken) {
+      sessionStorage.setItem(SESSION_TOKEN_STORAGE_KEY, bootstrap.sessionToken)
+    }
     setAuthEmail(nextEmail)
     setName(bootstrap.playerName?.trim() || displayNameFromEmail(nextEmail))
     setAccount(normalizeAccountState(bootstrap.account))
@@ -793,7 +811,10 @@ function App() {
 
   useEffect(() => {
     const storedEmail = sessionStorage.getItem(LOGIN_SESSION_STORAGE_KEY)?.trim().toLowerCase()
-    if (!storedEmail) {
+    const storedToken = getStoredSessionToken()
+    if (!storedEmail || !storedToken) {
+      sessionStorage.removeItem(LOGIN_SESSION_STORAGE_KEY)
+      sessionStorage.removeItem(SESSION_TOKEN_STORAGE_KEY)
       setAppStage('auth')
       return
     }
@@ -804,8 +825,8 @@ function App() {
       try {
         const response = await fetch(`${SERVER_URL}/auth/bootstrap`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: storedEmail }),
+          headers: authHeaders(),
+          body: JSON.stringify({}),
         })
         const payload = (await response.json()) as ({ ok: boolean; error?: string } & Partial<AuthBootstrapPayload>)
         if (cancelled) {
@@ -821,6 +842,7 @@ function App() {
           return
         }
         sessionStorage.removeItem(LOGIN_SESSION_STORAGE_KEY)
+        sessionStorage.removeItem(SESSION_TOKEN_STORAGE_KEY)
         setAuthEmail('')
         setAppStage('auth')
         setLoginError('Sesija nebegalioja. Prisijunk is naujo.')
@@ -1429,8 +1451,8 @@ function App() {
     try {
       const response = await fetch(`${SERVER_URL}/auth/bootstrap`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: authEmail }),
+        headers: authHeaders(),
+        body: JSON.stringify({}),
       })
       const payload = (await response.json()) as ({ ok: boolean; error?: string } & Partial<AuthBootstrapPayload>)
       if (!response.ok || !payload.ok || !payload.account) {
@@ -1541,8 +1563,8 @@ function App() {
     try {
       const response = await fetch(`${SERVER_URL}/auth/purchase`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: authEmail, itemType, itemId }),
+        headers: authHeaders(),
+        body: JSON.stringify({ itemType, itemId }),
       })
       const result = (await response.json()) as { ok: boolean; error?: string; account?: PlayerAccountState }
       if (!response.ok || !result.ok || !result.account) {
@@ -1564,6 +1586,7 @@ function App() {
       {
         name: name || 'Player',
         authUserId: getStoredAuthUserId(),
+        sessionToken: getStoredSessionToken(),
         password: roomPasswordInput.trim() || undefined,
         profile: withSlot(profileDraft, activeProfileSlot),
         gameType: selectedGameType,
@@ -1596,6 +1619,7 @@ function App() {
         roomCode: normalized,
         name: name || 'Player',
         authUserId: getStoredAuthUserId(),
+        sessionToken: getStoredSessionToken(),
         existingPlayerId,
         password: roomPasswordInput.trim() || undefined,
         profile: withSlot(profileDraft, activeProfileSlot),
@@ -1638,9 +1662,8 @@ function App() {
     try {
       const response = await fetch(`${SERVER_URL}/auth/profile`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({
-          email: authEmail,
           activeProfileSlot,
           profile: profileToSave,
           completeSetup,
@@ -2657,7 +2680,12 @@ function App() {
     if (roomCode) {
       socket?.emit('leave_room', {})
     }
+    // Anuliuojam sesija serveryje (fire-and-forget - storage valomas iskart).
+    if (getStoredSessionToken()) {
+      void fetch(`${SERVER_URL}/auth/logout`, { method: 'POST', headers: authHeaders() }).catch(() => {})
+    }
     sessionStorage.removeItem(LOGIN_SESSION_STORAGE_KEY)
+    sessionStorage.removeItem(SESSION_TOKEN_STORAGE_KEY)
     setAuthEmail('')
     setIsGuest(false)
     setAppStage('auth')

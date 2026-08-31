@@ -171,6 +171,8 @@ export interface AuthBootstrapPayload {
   activeProfileSlot: ProfileSlot;
   profileSlots: ProfileSlotMap;
   account: PlayerAccountState;
+  /** Sesijos tokenas - grazinamas tik login metu, saugomas kliente. */
+  sessionToken?: string;
 }
 
 export interface PlayerCardInfo {

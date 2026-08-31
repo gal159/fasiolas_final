@@ -94,6 +94,14 @@ async function main(): Promise<void> {
   await store.patch(user.id, { email: "naujas@example.com" });
   assert((await store.findByEmail("naujas@example.com"))?.id === user.id, "patch email sinchronizuoja stulpeli");
 
+  // sesijos tokeno paieska (JSONB doc, be atskiro stulpelio)
+  await store.patch(user.id, { sessionTokenHash: "sess123", sessionTokenExpiresAt: 2000 });
+  assert((await store.findBySessionToken("sess123", 1999))?.id === user.id, "findBySessionToken randa galiojanti");
+  assert((await store.findBySessionToken("sess123", 2001)) === null, "findBySessionToken atmete pasibaigusi");
+  assert((await store.findBySessionToken("kitas", 1999)) === null, "findBySessionToken atmete neteisinga hash");
+  await store.patch(user.id, { sessionTokenHash: null, sessionTokenExpiresAt: null });
+  assert((await store.findBySessionToken("sess123", 1999)) === null, "logout anuliuoja tokena");
+
   // upsert (migracijos kelias)
   await store.upsert(makeUser({ id: user.id, email: "naujas@example.com", playerName: "Perrasytas" }));
   assert((await store.findById(user.id))?.playerName === "Perrasytas", "upsert perraso esama irasa");

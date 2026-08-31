@@ -14,6 +14,9 @@ export type AuthUser = {
   account: PlayerAccountState;
   resetTokenHash: string | null;
   resetTokenExpiresAt: number | null;
+  // Optional, kad seni DB irasai (be siu lauku) liktu suderinami.
+  sessionTokenHash?: string | null;
+  sessionTokenExpiresAt?: number | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -23,6 +26,7 @@ export interface AuthUserStore {
   findByEmail(email: string): Promise<AuthUser | null>;
   findById(id: string): Promise<AuthUser | null>;
   findByResetToken(tokenHash: string, notExpiredBefore: number): Promise<AuthUser | null>;
+  findBySessionToken(tokenHash: string, notExpiredBefore: number): Promise<AuthUser | null>;
   findAllByPlayerName(playerName: string): Promise<AuthUser[]>;
   topPlayers(limit: number): Promise<AuthUser[]>;
   insert(user: AuthUser): Promise<void>;
@@ -64,6 +68,15 @@ export class NedbAuthUserStore implements AuthUserStore {
   async findAllByPlayerName(playerName: string): Promise<AuthUser[]> {
     const escaped = playerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     return this.db.find({ playerName: new RegExp(`^${escaped}$`, "i") });
+  }
+
+  async findBySessionToken(tokenHash: string, notExpiredBefore: number): Promise<AuthUser | null> {
+    return (
+      (await this.db.findOne({
+        sessionTokenHash: tokenHash,
+        sessionTokenExpiresAt: { $gte: notExpiredBefore },
+      })) ?? null
+    );
   }
 
   async topPlayers(limit: number): Promise<AuthUser[]> {
@@ -153,6 +166,16 @@ export class PostgresAuthUserStore implements AuthUserStore {
       [playerName],
     );
     return result.rows.map((row) => row.doc);
+  }
+
+  // Sesijos tokenas laikomas tik JSONB dokumente (be atskiro stulpelio) -
+  // nereikia ALTER TABLE migracijos esamai produkcijos lentelei.
+  async findBySessionToken(tokenHash: string, notExpiredBefore: number): Promise<AuthUser | null> {
+    const result = await this.pool.query<{ doc: AuthUser }>(
+      "SELECT doc FROM auth_users WHERE doc->>'sessionTokenHash' = $1 AND COALESCE((doc->>'sessionTokenExpiresAt')::bigint, 0) >= $2",
+      [tokenHash, notExpiredBefore],
+    );
+    return this.rowToUser(result.rows[0]);
   }
 
   async topPlayers(limit: number): Promise<AuthUser[]> {

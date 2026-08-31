@@ -2,6 +2,7 @@ import "dotenv/config";
 import cors from "cors";
 import express from "express";
 import rateLimit from "express-rate-limit";
+import helmet from "helmet";
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
@@ -54,6 +55,8 @@ const allowedOrigins = ALLOWED_ORIGINS_RAW.split(",")
 const app = express();
 // Render veikia uz reverse proxy - reikalinga, kad rate limiter matytu tikra IP.
 app.set("trust proxy", 1);
+// Saugumo headeriai; CORP atlaisvinamas, nes klientas gyvena kitame origine.
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(
   cors({
     origin: allowedOrigins.length > 0 ? allowedOrigins : true,
@@ -83,8 +86,19 @@ const sensitiveLimiter = rateLimit({
   message: { ok: false, error: "Per daug bandymu. Pabandyk po 15 minuciu." },
 });
 
+// Prisijungusio vartotojo paskyros endpointai - laisvesnis limitas, nes
+// bootstrap kvieciamas per kiekviena perkrovima, o profile per kiekviena equip.
+const accountLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: IS_PRODUCTION ? 300 : 5000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: "Per daug uzklausu. Pabandyk veliau." },
+});
+
 app.use(["/auth/login", "/auth/register"], authLimiter);
 app.use(["/auth/forgot-password", "/auth/reset-password"], sensitiveLimiter);
+app.use(["/auth/bootstrap", "/auth/profile", "/auth/purchase", "/auth/logout"], accountLimiter);
 
 const AUTH_USER_ID_REGEX = /^[a-f0-9]{32}$/i;
 
@@ -115,19 +129,17 @@ const profileSchema = z.object({
   profileSlot: z.enum(PROFILE_SLOT_OPTIONS),
 });
 
-const bootstrapSchema = z.object({
-  email: z.string().trim().email().max(120),
-});
-
+// bootstrapSchema nebereikalingas - bootstrap dabar autentifikuojamas Bearer tokenu.
 const saveProfileSchema = z.object({
-  email: z.string().trim().email().max(120),
+  // email paliktas optional senu klientu suderinamumui; autoritetas - sesijos tokenas.
+  email: z.string().trim().email().max(120).optional(),
   activeProfileSlot: z.enum(PROFILE_SLOT_OPTIONS),
   profile: profileSchema,
   completeSetup: z.boolean().optional(),
 });
 
 const authPurchaseSchema = z.object({
-  email: z.string().trim().email().max(120),
+  email: z.string().trim().email().max(120).optional(),
   itemType: z.enum(["avatar", "hat", "skin", "effect", "background", "table"]),
   itemId: z.string().trim().min(1),
 });
@@ -290,6 +302,46 @@ function hashToken(raw: string): string {
   return createHash("sha256").update(`${raw}:${APP_SECRET}`).digest("hex");
 }
 
+const SESSION_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 30;
+const SESSION_TOKEN_REGEX = /^[a-f0-9]{64}$/i;
+
+// Klaidu atsakymai be vidiniu detaliu: zod/DB klaidos loginamos, klientui
+// grazinamas bendras tekstas.
+function safeErrorMessage(error: unknown, context: string): string {
+  if (error instanceof z.ZodError) {
+    return "Neteisingi duomenys";
+  }
+  console.error(`${context}:`, error);
+  return "Serverio klaida";
+}
+
+async function issueSessionToken(userId: string): Promise<string> {
+  const raw = randomBytes(32).toString("hex");
+  await authStore.patch(userId, {
+    sessionTokenHash: hashToken(raw),
+    sessionTokenExpiresAt: Date.now() + SESSION_TOKEN_TTL_MS,
+    updatedAt: Date.now(),
+  });
+  return raw;
+}
+
+function extractBearerToken(req: express.Request): string | null {
+  const header = req.header("authorization") ?? "";
+  const match = /^Bearer\s+(\S+)$/i.exec(header.trim());
+  if (!match || !SESSION_TOKEN_REGEX.test(match[1])) {
+    return null;
+  }
+  return match[1];
+}
+
+async function getSessionUser(req: express.Request): Promise<AuthUser | null> {
+  const token = extractBearerToken(req);
+  if (!token) {
+    return null;
+  }
+  return authStore.findBySessionToken(hashToken(token), Date.now());
+}
+
 function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
   const digest = scryptSync(password, salt, 64).toString("hex");
@@ -351,7 +403,7 @@ app.post("/auth/register", async (req, res) => {
       registeredAt: nextUser.createdAt,
     });
   } catch (error) {
-    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+    res.status(400).json({ ok: false, error: safeErrorMessage(error, "auth/register") });
   }
 });
 
@@ -378,49 +430,62 @@ app.post("/auth/login", async (req, res) => {
     }
 
     const user = await hydrateAuthUser(storedUser);
+    const sessionToken = await issueSessionToken(user.id);
 
     res.json({
       ok: true,
       ...toBootstrapPayload({
         ...user,
       }),
+      sessionToken,
     });
   } catch (error) {
-    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+    res.status(400).json({ ok: false, error: safeErrorMessage(error, "auth/login") });
   }
 });
 
 app.post("/auth/bootstrap", async (req, res) => {
   try {
-    const parsed = bootstrapSchema.parse(req.body);
-    const email = normalizeEmail(parsed.email);
-    const storedUser = await authStore.findByEmail(email);
-
-    if (!storedUser) {
-      res.status(404).json({ ok: false, error: "Vartotojas nerastas" });
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) {
+      res.status(401).json({ ok: false, error: "Sesija negalioja. Prisijunk is naujo." });
       return;
     }
 
-    const user = await hydrateAuthUser(storedUser);
+    const user = await hydrateAuthUser(sessionUser);
 
     res.json({ ok: true, ...toBootstrapPayload(user) });
   } catch (error) {
-    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+    res.status(400).json({ ok: false, error: safeErrorMessage(error, "auth/bootstrap") });
+  }
+});
+
+app.post("/auth/logout", async (req, res) => {
+  try {
+    const sessionUser = await getSessionUser(req);
+    if (sessionUser) {
+      await authStore.patch(sessionUser.id, {
+        sessionTokenHash: null,
+        sessionTokenExpiresAt: null,
+        updatedAt: Date.now(),
+      });
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: safeErrorMessage(error, "auth/logout") });
   }
 });
 
 app.post("/auth/profile", async (req, res) => {
   try {
-    const parsed = saveProfileSchema.parse(req.body);
-    const email = normalizeEmail(parsed.email);
-    const storedUser = await authStore.findByEmail(email);
-
-    if (!storedUser) {
-      res.status(404).json({ ok: false, error: "Vartotojas nerastas" });
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) {
+      res.status(401).json({ ok: false, error: "Sesija negalioja. Prisijunk is naujo." });
       return;
     }
 
-    const user = await hydrateAuthUser(storedUser);
+    const parsed = saveProfileSchema.parse(req.body);
+    const user = await hydrateAuthUser(sessionUser);
     const activeProfileSlot = parsed.activeProfileSlot;
     const nextProfile = normalizeProfile({ ...parsed.profile, profileSlot: activeProfileSlot }, activeProfileSlot);
     const nextProfileSlots: ProfileSlotMap = {
@@ -448,7 +513,7 @@ app.post("/auth/profile", async (req, res) => {
       }),
     });
   } catch (error) {
-    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+    res.status(400).json({ ok: false, error: safeErrorMessage(error, "auth/profile") });
   }
 });
 
@@ -549,7 +614,7 @@ app.post("/auth/forgot-password", async (req, res) => {
       previewResetLink,
     });
   } catch (error) {
-    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+    res.status(400).json({ ok: false, error: safeErrorMessage(error, "auth/forgot-password") });
   }
 });
 
@@ -570,12 +635,16 @@ app.post("/auth/reset-password", async (req, res) => {
           passwordHash: hashPassword(parsed.password),
           resetTokenHash: null,
           resetTokenExpiresAt: null,
+          // Anuliuojam aktyvia sesija - jei paskyra buvo perimta, senas
+          // tokenas nustoja galioti pakeitus slaptazodi.
+          sessionTokenHash: null,
+          sessionTokenExpiresAt: null,
           updatedAt: now,
         });
 
     res.json({ ok: true, message: "Slaptazodis sekmingai atnaujintas" });
   } catch (error) {
-    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+    res.status(400).json({ ok: false, error: safeErrorMessage(error, "auth/reset-password") });
   }
 });
 
@@ -620,6 +689,7 @@ engine.setMatchRewardsListener((rewards) => {
 const createRoomSchema = z.object({
   name: z.string().trim().min(1).max(24),
   authUserId: z.string().trim().regex(AUTH_USER_ID_REGEX).optional(),
+  sessionToken: z.string().trim().regex(SESSION_TOKEN_REGEX).optional(),
   profile: profileSchema.optional(),
   password: z.string().trim().max(32).optional(),
   // Seni klientai lauko nesiuncia - jiems visada fasiolas.
@@ -630,10 +700,27 @@ const joinRoomSchema = z.object({
   roomCode: z.string().trim().min(2).max(12),
   name: z.string().trim().min(1).max(24),
   authUserId: z.string().trim().regex(AUTH_USER_ID_REGEX).optional(),
+  sessionToken: z.string().trim().regex(SESSION_TOKEN_REGEX).optional(),
   existingPlayerId: z.string().uuid().optional(),
   profile: profileSchema.optional(),
   password: z.string().trim().max(32).optional(),
 });
+
+// authUserId priimamas tik su galiojanciu to paties vartotojo sessionToken -
+// kitaip match rewards butu galima nukreipti i svetima paskyra.
+async function resolveVerifiedAuthUser(
+  authUserId: string | undefined,
+  sessionToken: string | undefined,
+): Promise<AuthUser | null> {
+  if (!authUserId || !sessionToken) {
+    return null;
+  }
+  const user = await authStore.findBySessionToken(hashToken(sessionToken), Date.now());
+  if (!user || user.id !== authUserId) {
+    return null;
+  }
+  return user;
+}
 
 const updateProfileSchema = z.object({
   profile: profileSchema,
@@ -731,18 +818,17 @@ function unlockItem(account: PlayerAccountState, type: ShopItemType, itemId: Sho
 
 app.post("/auth/purchase", async (req, res) => {
   try {
-    const parsed = authPurchaseSchema.parse(req.body);
-    const email = normalizeEmail(parsed.email);
-    const itemType = parsed.itemType as ShopItemType;
-    const itemId = parsed.itemId as ShopItemId;
-    const storedUser = await authStore.findByEmail(email);
-
-    if (!storedUser) {
-      res.status(404).json({ ok: false, error: "Vartotojas nerastas" });
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) {
+      res.status(401).json({ ok: false, error: "Sesija negalioja. Prisijunk is naujo." });
       return;
     }
 
-    const user = await hydrateAuthUser(storedUser);
+    const parsed = authPurchaseSchema.parse(req.body);
+    const itemType = parsed.itemType as ShopItemType;
+    const itemId = parsed.itemId as ShopItemId;
+
+    const user = await hydrateAuthUser(sessionUser);
     if (!isValidShopItem(itemType, itemId)) {
       res.status(400).json({ ok: false, error: "Neteisingas shop elementas" });
       return;
@@ -771,7 +857,7 @@ app.post("/auth/purchase", async (req, res) => {
 
     res.json({ ok: true, account });
   } catch (error) {
-    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+    res.status(400).json({ ok: false, error: safeErrorMessage(error, "auth/purchase") });
   }
 });
 
@@ -859,12 +945,11 @@ io.on("connection", (socket) => {
   socket.on("create_room", (payload: unknown, ack) => {
     try {
       const parsed = createRoomSchema.parse(payload);
-      const authUser = parsed.authUserId ? authStore.findById(parsed.authUserId) : null;
-      Promise.resolve(authUser)
+      resolveVerifiedAuthUser(parsed.authUserId, parsed.sessionToken)
         .then((resolvedAuthUser) => {
           const effectiveName = resolvedAuthUser?.playerName?.trim() || parsed.name;
           const { roomCode, playerId } = engine.createRoom(effectiveName, socket.id, parsed.profile, {
-            authUserId: resolvedAuthUser?.id ?? parsed.authUserId ?? null,
+            authUserId: resolvedAuthUser?.id ?? null,
             registeredAt: resolvedAuthUser?.createdAt,
             password: parsed.password ?? null,
             gameType: parsed.gameType,
@@ -888,8 +973,7 @@ io.on("connection", (socket) => {
       const parsed = joinRoomSchema.parse(payload);
       const roomCode = parsed.roomCode.trim().toUpperCase();
       const existingPlayerId = parsed.existingPlayerId;
-      const authUser = parsed.authUserId ? authStore.findById(parsed.authUserId) : null;
-      Promise.resolve(authUser)
+      resolveVerifiedAuthUser(parsed.authUserId, parsed.sessionToken)
         .then((resolvedAuthUser) => {
           let playerId = existingPlayerId;
           if (playerId) {
@@ -897,7 +981,7 @@ io.on("connection", (socket) => {
           } else {
             const effectiveName = resolvedAuthUser?.playerName?.trim() || parsed.name;
             const joined = engine.joinRoom(roomCode, effectiveName, socket.id, parsed.profile, {
-              authUserId: resolvedAuthUser?.id ?? parsed.authUserId ?? null,
+              authUserId: resolvedAuthUser?.id ?? null,
               registeredAt: resolvedAuthUser?.createdAt,
               password: parsed.password ?? null,
             });
