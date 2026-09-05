@@ -934,6 +934,14 @@ setInterval(() => {
   }
 }, Number(process.env.ROOM_SWEEP_INTERVAL_MS ?? 60_000));
 
+setInterval(() => {
+  const changedRoomCodes = engine.expireTurnTimers();
+  for (const roomCode of changedRoomCodes) {
+    emitRoomState(roomCode);
+    engine.kickBots(roomCode);
+  }
+}, Number(process.env.TURN_TIMER_TICK_MS ?? 500));
+
 // Kortos skridimo animacija transliuojama visiems, isskyrus veiksmo autoriu
 // (jis animuoja lokaliai). Botu veiksmai taip pat patenka cia.
 engine.setActionListener((roomCode, info) => {

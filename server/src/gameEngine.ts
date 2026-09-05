@@ -134,6 +134,7 @@ const RANK_ORDER: Record<Rank, number> = {
 
 const BASE_POINTS_PER_GAME = 200;
 const TURN_TIMER_DURATION_MS = 15_000;
+const TURN_TIMER_GRACE_MS = 350;
 const PLACEMENT_BONUS: Record<number, number> = {
   1: 200,
   2: 100,
@@ -599,6 +600,106 @@ export class GameEngine {
     }
 
     return { type: "TAKE_PILE" };
+  }
+
+  public expireTurnTimers(now = Date.now()): string[] {
+    const changedRoomCodes: string[] = [];
+    for (const [roomCode, room] of this.rooms.entries()) {
+      if (this.applyTurnTimeout(roomCode, room, now)) {
+        changedRoomCodes.push(roomCode);
+      }
+    }
+    return changedRoomCodes;
+  }
+
+  private applyTurnTimeout(roomCode: string, room: GameRoom, now: number): boolean {
+    if (
+      (room.phase !== "DEALING" && room.phase !== "PLAYING") ||
+      room.pendingFasiolas ||
+      room.pendingThree ||
+      !room.currentTurnPlayerId ||
+      !room.turnStartedAt ||
+      now - room.turnStartedAt < TURN_TIMER_DURATION_MS + TURN_TIMER_GRACE_MS
+    ) {
+      return false;
+    }
+
+    const player = room.players.find((p) => p.id === room.currentTurnPlayerId);
+    if (!player) {
+      room.currentTurnPlayerId = null;
+      this.resetTurnTimer(room);
+      return true;
+    }
+
+    try {
+      if (room.gameType === "nnn") {
+        this.applyTurnAction(roomCode, player.id, this.decideTimeoutNnnAction(room, player));
+        room.dealerLog.push(`${player.name} praleido laika - atliktas automatinis ejimas`);
+        return true;
+      }
+
+      if (room.phase === "DEALING") {
+        this.applyTimeoutDealingAction(roomCode, room, player);
+        return true;
+      }
+
+      const action = this.decideTimeoutPlayingAction(room, player);
+      if (action) {
+        this.applyTurnAction(roomCode, player.id, action);
+        room.dealerLog.push(`${player.name} praleido laika - atliktas automatinis ejimas`);
+        return true;
+      }
+
+      this.advanceTurn(room);
+      room.dealerLog.push(`${player.name} praleido laika - ejimas perduotas toliau`);
+      return true;
+    } catch (error) {
+      console.error("Automatinio ejimo klaida:", error);
+      room.turnStartedAt = now;
+      return true;
+    }
+  }
+
+  private applyTimeoutDealingAction(roomCode: string, room: GameRoom, player: InternalPlayer): void {
+    if (!room.revealedDrawCard && room.centerDeck.length > 0) {
+      this.applyTurnAction(roomCode, player.id, { type: "DRAW_REVEAL" });
+    }
+
+    if (room.revealedDrawCard) {
+      this.applyTurnAction(roomCode, player.id, { type: "PLACE_REVEALED", toPlayerId: player.id });
+      room.dealerLog.push(`${player.name} praleido laika - korta automatiskai padeta sau`);
+      return;
+    }
+
+    this.applyTurnAction(roomCode, player.id, { type: "END_TURN" });
+    room.dealerLog.push(`${player.name} praleido laika - ejimas perduotas toliau`);
+  }
+
+  private decideTimeoutPlayingAction(room: GameRoom, player: InternalPlayer): PlayingAction | null {
+    if (room.tableStack.length > 0) {
+      return { type: "TAKE_OLDEST" };
+    }
+    const playableIdx = this.findPlayableCardIndex(room, player);
+    return playableIdx >= 0 ? { type: "PLAY_CARD", cardIndex: playableIdx } : null;
+  }
+
+  private decideTimeoutNnnAction(room: GameRoom, player: InternalPlayer): NnnAction {
+    if (player.cards.length === 0 && player.faceUpCards.length === 0 && player.blindCards.length > 0) {
+      return { type: "PLAY_BLIND", blindIndex: 0 };
+    }
+    if (room.tableStack.length > 0) {
+      return { type: "TAKE_PILE" };
+    }
+    const playableIndex = player.cards.findIndex((card) => card.rank !== "3");
+    if (playableIndex >= 0) {
+      return { type: "PLAY_CARDS", cardIndexes: [playableIndex] };
+    }
+    const threeIndex = player.cards.findIndex((card) => card.rank === "3");
+    const target = room.players.find((candidate) => candidate.id !== player.id && nnnTotalCards(candidate) > 0);
+    if (threeIndex >= 0 && target) {
+      return { type: "SHOW_THREE", cardIndex: threeIndex, targetPlayerId: target.id };
+    }
+    return { type: "PLAY_BLIND", blindIndex: 0 };
   }
 
   private decideBotDealingAction(room: GameRoom, bot: InternalPlayer): DealingAction {
