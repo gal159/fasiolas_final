@@ -235,6 +235,9 @@ export interface PublicTableState {
   gameType?: GameType;
   // Visiems zaidejams vienodas stalas, parinktas pagal brangiausia lobby dalyviu stalo skina.
   tableId?: TableId;
+  // Aktyvios eiles timeris. turnStartedAt resetinamas po sekmingo veiksmo.
+  turnStartedAt?: number | null;
+  turnTimerDurationMs?: number;
   // 999: is zaidimo isbrauktu kortu skaicius (sudegintos 10 + panaudoti trejetai).
   discardedCount?: number;
   // 999: laukiama taikinio atsakymo i parodyta trejeta.

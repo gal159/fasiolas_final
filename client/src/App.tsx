@@ -655,6 +655,7 @@ function App() {
   const [showMyHand, setShowMyHand] = useState(false)
   const [soundMuted, setSoundMuted] = useState(sfx.isMuted)
   const [tableScale, setTableScale] = useState(() => getStoredTableScale())
+  const [turnNow, setTurnNow] = useState(() => Date.now())
   const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null)
   const [isRevealedCardDragged, setIsRevealedCardDragged] = useState(false)
   // 999: zaidimo tipo jungiklis kambario kurimui ir rankos multi-select.
@@ -1175,6 +1176,14 @@ function App() {
   )
 
   const isMyTurn = Boolean(payload && payload.state.currentTurnPlayerId === payload.yourPlayerId)
+  const turnProgress = useMemo(() => {
+    const startedAt = payload?.state.turnStartedAt
+    const duration = payload?.state.turnTimerDurationMs ?? 15_000
+    if (!startedAt || duration <= 0 || !payload?.state.currentTurnPlayerId) {
+      return 0
+    }
+    return Math.min(1, Math.max(0, (turnNow - startedAt) / duration))
+  }, [payload?.state.currentTurnPlayerId, payload?.state.turnStartedAt, payload?.state.turnTimerDurationMs, turnNow])
 
   const isNnn = (payload?.state.gameType ?? 'fasiolas') === 'nnn'
 
@@ -1183,6 +1192,21 @@ function App() {
   useEffect(() => {
     setSelectedHandIndexes([])
   }, [handSignature])
+
+  useEffect(() => {
+    if (!payload?.state.currentTurnPlayerId || !payload.state.turnStartedAt || !showTableWindow) {
+      setTurnNow(Date.now())
+      return
+    }
+
+    let frame = 0
+    const tick = () => {
+      setTurnNow(Date.now())
+      frame = window.requestAnimationFrame(tick)
+    }
+    frame = window.requestAnimationFrame(tick)
+    return () => window.cancelAnimationFrame(frame)
+  }, [payload?.state.currentTurnPlayerId, payload?.state.turnStartedAt, showTableWindow])
 
   const showFasiolasContribution = Boolean(
     payload?.state.pendingFasiolas &&
@@ -3702,7 +3726,20 @@ function App() {
                     seat.id === payload.state.currentTurnPlayerId ? 'activeTurn' : '',
                     seat.disconnected ? 'disconnectedSeat' : '',
                   ].filter(Boolean).join(' ')}
-                  style={{ left: `${seat.x}%`, top: `${seat.y}%` }}
+                  style={
+                    {
+                      left: `${seat.x}%`,
+                      top: `${seat.y}%`,
+                      ...(seat.id === payload.state.currentTurnPlayerId
+                        ? {
+                            '--turn-progress': turnProgress,
+                            '--turn-pct': `${turnProgress * 100}%`,
+                            '--turn-deg': `${turnProgress * 360}deg`,
+                            '--turn-hot': turnProgress,
+                          }
+                        : {}),
+                    } as CSSProperties
+                  }
                   onDragOver={allowDrop}
                   onDrop={() => handleSeatDrop(seat.id)}
                   onClick={() => handleSeatClick(seat.id)}

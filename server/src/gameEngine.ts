@@ -81,6 +81,7 @@ type GameRoom = {
   code: string;
   gameType: GameType;
   tableId: TableId;
+  turnStartedAt: number | null;
   players: InternalPlayer[];
   phase: PublicTableState["phase"];
   centerDeck: Card[];
@@ -132,6 +133,7 @@ const RANK_ORDER: Record<Rank, number> = {
 };
 
 const BASE_POINTS_PER_GAME = 200;
+const TURN_TIMER_DURATION_MS = 15_000;
 const PLACEMENT_BONUS: Record<number, number> = {
   1: 200,
   2: 100,
@@ -711,6 +713,7 @@ export class GameEngine {
       code: roomCode,
       gameType: options?.gameType ?? "fasiolas",
       tableId: playerProfile.tableId,
+      turnStartedAt: null,
       players: [
         {
           id: playerId,
@@ -751,6 +754,10 @@ export class GameEngine {
 
   private maxPlayersFor(room: GameRoom): number {
     return room.gameType === "nnn" ? NNN_MAX_PLAYERS : 8;
+  }
+
+  private resetTurnTimer(room: GameRoom): void {
+    room.turnStartedAt = room.currentTurnPlayerId ? Date.now() : null;
   }
 
   // Vieso lobby saraso santrauka: tik dar neprasideje kambariai.
@@ -957,6 +964,7 @@ export class GameEngine {
     }
 
     room.currentTurnPlayerId = room.players[0]?.id ?? null;
+    this.resetTurnTimer(room);
   }
 
   // 999 startas: DEALING faze praleidziama - iskart dalinama 3 aklos +
@@ -1001,6 +1009,7 @@ export class GameEngine {
       : null;
     const starter = champion ?? room.players[Math.floor(Math.random() * room.players.length)];
     room.currentTurnPlayerId = starter?.id ?? null;
+    this.resetTurnTimer(room);
     if (starter) {
       room.dealerLog.push(champion ? `Pradeda cempionas ${starter.name}` : `Pradeda ${starter.name}`);
     }
@@ -1037,6 +1046,8 @@ export class GameEngine {
     } else {
       throw new Error("Game is not active");
     }
+
+    this.resetTurnTimer(room);
 
     // Tik po sekmingo pritaikymo - klaidos atveju animacijos nereikia.
     if (animationInfo) {
@@ -1144,6 +1155,7 @@ export class GameEngine {
     }
     const nextIndex = (accusedIndex + 1) % room.players.length;
     room.currentTurnPlayerId = room.players[nextIndex]?.id ?? null;
+    this.resetTurnTimer(room);
     room.lastAction = null;
 
     room.dealerLog.push("Fasiolas activated");
@@ -1331,6 +1343,8 @@ export class GameEngine {
           : null,
         gameType: room.gameType,
         tableId: room.tableId,
+        turnStartedAt: room.turnStartedAt,
+        turnTimerDurationMs: TURN_TIMER_DURATION_MS,
         discardedCount: room.discardPile.length,
         pendingThree: room.pendingThree,
       },
@@ -1354,6 +1368,7 @@ export class GameEngine {
     this.checkNnnEnd(room);
     if (room.phase === "PLAYING") {
       this.advanceNnnTurn(room, pending.showerPlayerId);
+      this.resetTurnTimer(room);
     }
   }
 
@@ -1766,6 +1781,7 @@ export class GameEngine {
     }
     const nextPlayer = room.players[next] ?? null;
     room.currentTurnPlayerId = nextPlayer?.id ?? null;
+    this.resetTurnTimer(room);
     if (nextPlayer) {
       this.nnnSettleZones(room, nextPlayer);
     }
@@ -1797,6 +1813,7 @@ export class GameEngine {
       room.lastChampionPlayerId = room.finalRankingPlayerIds[0] ?? null;
       room.dealerLog.push("999 zaidimas baigtas");
       room.currentTurnPlayerId = null;
+      this.resetTurnTimer(room);
       room.pendingThree = null;
       this.applyMatchRewards(room);
     }
@@ -1822,6 +1839,7 @@ export class GameEngine {
       room.finalRankingPlayerIds.push(room.loserPlayerId);
       room.dealerLog.push("Game finished with final standings");
       room.currentTurnPlayerId = null;
+      this.resetTurnTimer(room);
       this.applyMatchRewards(room);
     }
   }
@@ -1837,6 +1855,7 @@ export class GameEngine {
 
     const starter = room.players.find((p) => p.cards.some((c) => c.suit === "S" && c.rank === "9"));
     room.currentTurnPlayerId = starter?.id ?? room.players[0]?.id ?? null;
+    this.resetTurnTimer(room);
     room.dealerLog.push("Moved to playing phase");
   }
 
@@ -1915,6 +1934,7 @@ export class GameEngine {
     }
 
     room.currentTurnPlayerId = nextPlayerId;
+    this.resetTurnTimer(room);
   }
 
   private applyMatchRewards(room: GameRoom): void {
@@ -2095,6 +2115,7 @@ export class GameEngine {
     room.revealedDrawCard = null;
     room.tableStack = [];
     room.currentTurnPlayerId = null;
+    room.turnStartedAt = null;
     room.lastNonSpadeDrawnSuit = null;
     room.trumpSuit = null;
     room.winnerPlayerIds = [];

@@ -9883,3 +9883,66 @@ button.lobbyJoinBtn:disabled {
     padding-top: 18px !important;
   }
 }
+
+/* Aktyvios eiles timeris: serverio sinchronizuotas progress vietoj seno
+   delay raudonavimo. Ringas pildosi pagal laikrodzio rodykle, o du soniniai
+   slideriai rodo ta pati laika is abieju korteles pusiu. */
+.tableSeat.activeTurn .profileBadge.compact {
+  animation: none !important;
+  filter:
+    drop-shadow(0 0 10px color-mix(in srgb, #ff3434 calc(var(--turn-hot, 0) * 100%), #ffd66e))
+    drop-shadow(0 0 28px color-mix(in srgb, rgba(255, 48, 32, 0.86) calc(var(--turn-hot, 0) * 100%), rgba(255, 196, 64, 0.72))) !important;
+}
+
+.tableSeat.activeTurn .seatIdentityRow {
+  --turn-ring-color: color-mix(in srgb, #ff3434 calc(var(--turn-hot, 0) * 100%), #ffd66e);
+  --turn-track-color: rgba(255, 255, 255, 0.16);
+  border-radius: 22px;
+}
+
+.tableSeat.activeTurn .seatIdentityRow::before {
+  content: "";
+  position: absolute;
+  inset: 50px -13px -13px;
+  border-radius: 24px;
+  padding: 4px;
+  background:
+    conic-gradient(from -90deg, var(--turn-ring-color) var(--turn-deg, 0deg), var(--turn-track-color) 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  filter: drop-shadow(0 0 9px color-mix(in srgb, #ff3434 calc(var(--turn-hot, 0) * 100%), #ffcf6e));
+  pointer-events: none;
+  z-index: 4;
+}
+
+.tableSeat:not(.me).activeTurn .seatIdentityRow::before {
+  inset: -13px -13px 50px;
+}
+
+.tableSeat.activeTurn .seatIdentityRow::after {
+  content: "";
+  position: absolute;
+  inset: 58px -22px -5px;
+  border-radius: 26px;
+  background:
+    linear-gradient(to top, var(--turn-ring-color), var(--turn-ring-color)) left center / 5px var(--turn-pct, 0%) no-repeat,
+    linear-gradient(to bottom, var(--turn-ring-color), var(--turn-ring-color)) right center / 5px var(--turn-pct, 0%) no-repeat;
+  box-shadow:
+    -1px 0 10px color-mix(in srgb, #ff3434 calc(var(--turn-hot, 0) * 100%), #ffd66e),
+    1px 0 10px color-mix(in srgb, #ff3434 calc(var(--turn-hot, 0) * 100%), #ffd66e);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.tableSeat:not(.me).activeTurn .seatIdentityRow::after {
+  inset: -5px -22px 58px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tableSeat.activeTurn .seatIdentityRow::before,
+  .tableSeat.activeTurn .seatIdentityRow::after {
+    transition: none !important;
+  }
+}
