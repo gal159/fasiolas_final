@@ -8462,11 +8462,16 @@ header.profileOnboardingHeader {
   overflow-y: auto;
   max-width: 560px;
   text-align: left;
+  color: #fff !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
 }
+.rulesDialog h2,
 .rulesDialog h3 {
+  color: #fff !important;
   margin: 14px 0 4px;
 }
 .rulesDialog p {
+  color: #fff !important;
   margin: 0 0 8px;
   line-height: 1.45;
 }
