@@ -9885,17 +9885,16 @@ button.lobbyJoinBtn:disabled {
 }
 
 /* Aktyvios eiles timeris: serverio sinchronizuotas progress vietoj seno
-   delay raudonavimo. Ringas pildosi pagal laikrodzio rodykle, o du soniniai
-   slideriai rodo ta pati laika is abieju korteles pusiu. */
+   delay raudonavimo. Ringas pildosi pagal laikrodzio rodykle. */
 .tableSeat.activeTurn .profileBadge.compact {
   animation: none !important;
   filter:
-    drop-shadow(0 0 10px color-mix(in srgb, #ff3434 calc(var(--turn-hot, 0) * 100%), #ffd66e))
-    drop-shadow(0 0 28px color-mix(in srgb, rgba(255, 48, 32, 0.86) calc(var(--turn-hot, 0) * 100%), rgba(255, 196, 64, 0.72))) !important;
+    drop-shadow(0 0 10px color-mix(in srgb, #ff3434 calc(var(--turn-hot, 0) * 100%), #36d866))
+    drop-shadow(0 0 28px color-mix(in srgb, rgba(255, 48, 32, 0.86) calc(var(--turn-hot, 0) * 100%), rgba(42, 214, 96, 0.72))) !important;
 }
 
 .tableSeat.activeTurn .seatIdentityRow {
-  --turn-ring-color: color-mix(in srgb, #ff3434 calc(var(--turn-hot, 0) * 100%), #ffd66e);
+  --turn-ring-color: color-mix(in srgb, #ff3434 calc(var(--turn-hot, 0) * 100%), #35d869);
   --turn-track-color: rgba(255, 255, 255, 0.16);
   border-radius: 22px;
 }
@@ -9912,7 +9911,7 @@ button.lobbyJoinBtn:disabled {
   mask-composite: exclude;
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
-  filter: drop-shadow(0 0 9px color-mix(in srgb, #ff3434 calc(var(--turn-hot, 0) * 100%), #ffcf6e));
+  filter: drop-shadow(0 0 9px color-mix(in srgb, #ff3434 calc(var(--turn-hot, 0) * 100%), #42df72));
   pointer-events: none;
   z-index: 4;
 }
@@ -9922,27 +9921,11 @@ button.lobbyJoinBtn:disabled {
 }
 
 .tableSeat.activeTurn .seatIdentityRow::after {
-  content: "";
-  position: absolute;
-  inset: 58px -22px -5px;
-  border-radius: 26px;
-  background:
-    linear-gradient(to top, var(--turn-ring-color), var(--turn-ring-color)) left center / 5px var(--turn-pct, 0%) no-repeat,
-    linear-gradient(to bottom, var(--turn-ring-color), var(--turn-ring-color)) right center / 5px var(--turn-pct, 0%) no-repeat;
-  box-shadow:
-    -1px 0 10px color-mix(in srgb, #ff3434 calc(var(--turn-hot, 0) * 100%), #ffd66e),
-    1px 0 10px color-mix(in srgb, #ff3434 calc(var(--turn-hot, 0) * 100%), #ffd66e);
-  pointer-events: none;
-  z-index: 5;
-}
-
-.tableSeat:not(.me).activeTurn .seatIdentityRow::after {
-  inset: -5px -22px 58px;
+  display: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tableSeat.activeTurn .seatIdentityRow::before,
-  .tableSeat.activeTurn .seatIdentityRow::after {
+  .tableSeat.activeTurn .seatIdentityRow::before {
     transition: none !important;
   }
 }

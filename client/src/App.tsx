@@ -3733,7 +3733,6 @@ function App() {
                       ...(seat.id === payload.state.currentTurnPlayerId
                         ? {
                             '--turn-progress': turnProgress,
-                            '--turn-pct': `${turnProgress * 100}%`,
                             '--turn-deg': `${turnProgress * 360}deg`,
                             '--turn-hot': turnProgress,
                           }
