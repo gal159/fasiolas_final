@@ -1849,6 +1849,28 @@ function App() {
     handlePlaceRevealedWithSlide(targetPlayerId)
   }
 
+  const CARD_ANIMATION_ASPECT = 70 / 98
+
+  function getCardAnimationRect(element: HTMLElement): { left: number; top: number; width: number; height: number } {
+    const cardElement = (
+      element.matches('.playingCard') ? element : element.querySelector('.playingCard')
+    ) as HTMLElement | null
+    const source = cardElement ?? element
+    const rect = source.getBoundingClientRect()
+    if (cardElement && rect.width > 0 && rect.height > 0) {
+      return { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
+    }
+
+    const width = Math.min(70, Math.max(44, rect.width * 0.42))
+    const height = width / CARD_ANIMATION_ASPECT
+    return {
+      left: rect.left + (rect.width - width) / 2,
+      top: rect.top + (rect.height - height) / 2,
+      width,
+      height,
+    }
+  }
+
   function animateRemoteAction(info: ActionAnimatedEvent): void {
     if (!info.card) {
       return
@@ -1886,7 +1908,7 @@ function App() {
       return
     }
 
-    const sourceRect = source.getBoundingClientRect()
+    const sourceRect = getCardAnimationRect(source)
     const targetRect = target.getBoundingClientRect()
     if (!sourceRect.width || !targetRect.width) {
       return
@@ -1932,7 +1954,7 @@ function App() {
       return
     }
 
-    const sourceRect = source.getBoundingClientRect()
+    const sourceRect = getCardAnimationRect(source)
     const targetRect = target.getBoundingClientRect()
     const toX = targetRect.left + (targetRect.width - sourceRect.width) / 2
     const toY = targetRect.top + (targetRect.height - sourceRect.height) / 2
@@ -2028,7 +2050,7 @@ function App() {
       return
     }
 
-    const sourceRect = sourceElement.getBoundingClientRect()
+    const sourceRect = getCardAnimationRect(sourceElement)
     const targetRect = target.getBoundingClientRect()
     setFlyingPlayedCard({
       card: firstCard,
@@ -2060,7 +2082,7 @@ function App() {
       return
     }
 
-    const sourceRect = source.getBoundingClientRect()
+    const sourceRect = getCardAnimationRect(source)
     const targetRect = target.getBoundingClientRect()
     const toX = targetRect.left + (targetRect.width - sourceRect.width) / 2
     const toY = targetRect.top + (targetRect.height - sourceRect.height) / 2
