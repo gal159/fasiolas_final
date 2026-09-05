@@ -3363,7 +3363,7 @@ body:has(.tableWindowOverlay) {
 }
 
 .roundTableCenter.dealingCenter {
-  top: 53%;
+  top: 50%;
 }
 
 .tableCenterStack {
