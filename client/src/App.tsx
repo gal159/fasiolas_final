@@ -4071,6 +4071,14 @@ function App() {
       {showRules ? (
         <section className="resultsOverlay" role="dialog" aria-modal="true" aria-label="Zaidimo taisykles" onClick={() => setShowRules(false)}>
           <article className="resultsDialog rulesDialog" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="rulesCloseButton"
+              aria-label="Uzdaryti taisykles"
+              onClick={() => setShowRules(false)}
+            >
+              X
+            </button>
             <h2>Kaip zaisti Fasiola</h2>
             <h3>Tikslas</h3>
             <p>Kuo greiciau atsikratyti visu savo kortu. Paskutinis likes su kortomis pralaimi partija.</p>
