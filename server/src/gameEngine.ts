@@ -80,6 +80,7 @@ type LastActionRecord = {
 type GameRoom = {
   code: string;
   gameType: GameType;
+  tableId: TableId;
   players: InternalPlayer[];
   phase: PublicTableState["phase"];
   centerDeck: Card[];
@@ -219,6 +220,32 @@ function resolveItemCost(type: ShopItemType, itemId: ShopItemId): number {
     return AVATAR_PRICE_OVERRIDES[avatarId] ?? RARITY_PRICES[AVATAR_RARITY[avatarId]];
   }
   return RARITY_PRICES[resolveItemRarity(type, itemId)];
+}
+
+function resolveTableCost(tableId: TableId): number {
+  return RARITY_PRICES[TABLE_RARITY[tableId]];
+}
+
+function chooseRoomTableId(players: InternalPlayer[]): TableId {
+  let bestCost = -1;
+  let candidates: TableId[] = [];
+
+  for (const player of players) {
+    const tableId = player.profile.tableId;
+    const cost = resolveTableCost(tableId);
+    if (cost > bestCost) {
+      bestCost = cost;
+      candidates = [tableId];
+    } else if (cost === bestCost) {
+      candidates.push(tableId);
+    }
+  }
+
+  if (candidates.length === 0) {
+    return "common_green";
+  }
+
+  return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
 function isValidShopItem(type: ShopItemType, itemId: ShopItemId): boolean {
@@ -683,6 +710,7 @@ export class GameEngine {
     this.rooms.set(roomCode, {
       code: roomCode,
       gameType: options?.gameType ?? "fasiolas",
+      tableId: playerProfile.tableId,
       players: [
         {
           id: playerId,
@@ -899,6 +927,7 @@ export class GameEngine {
       this.startNnnGame(room);
       return;
     }
+    room.tableId = chooseRoomTableId(room.players);
     room.phase = "DEALING";
     room.centerDeck = createDeck();
     room.revealedDrawCard = null;
@@ -933,6 +962,7 @@ export class GameEngine {
   // 999 startas: DEALING faze praleidziama - iskart dalinama 3 aklos +
   // 3 atverstos + 3 i ranka ir pereinama i PLAYING.
   private startNnnGame(room: GameRoom): void {
+    room.tableId = chooseRoomTableId(room.players);
     room.phase = "PLAYING";
     room.centerDeck = createDeck();
     room.revealedDrawCard = null;
@@ -1300,6 +1330,7 @@ export class GameEngine {
           ? room.matchRewards.map(({ playerId, placement, reward, won }) => ({ playerId, placement, reward, won }))
           : null,
         gameType: room.gameType,
+        tableId: room.tableId,
         discardedCount: room.discardPile.length,
         pendingThree: room.pendingThree,
       },

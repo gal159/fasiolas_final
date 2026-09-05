@@ -233,6 +233,8 @@ export interface PublicTableState {
   matchRewards: MatchRewardEntry[] | null;
   // Nebutini (senu klientu suderinamumas). gameType nesant laikoma "fasiolas".
   gameType?: GameType;
+  // Visiems zaidejams vienodas stalas, parinktas pagal brangiausia lobby dalyviu stalo skina.
+  tableId?: TableId;
   // 999: is zaidimo isbrauktu kortu skaicius (sudegintos 10 + panaudoti trejetai).
   discardedCount?: number;
   // 999: laukiama taikinio atsakymo i parodyta trejeta.

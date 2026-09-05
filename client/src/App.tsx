@@ -3373,7 +3373,7 @@ function App() {
               </div>
             ) : null}
 
-            <div className={`roundTableArea table-${me?.profile.tableId ?? 'common_green'}`}>
+            <div className={`roundTableArea table-${payload.state.tableId ?? me?.profile.tableId ?? 'common_green'}`}>
               <div className="roundTableStage" style={{ '--table-scale': tableScale } as CSSProperties}>
               {payload.state.phase === 'DEALING' ? (
                 <div className="fasiolasDock">
