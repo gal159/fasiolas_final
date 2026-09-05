@@ -9785,3 +9785,101 @@ button.lobbyJoinBtn:disabled {
     width: 100%;
   }
 }
+
+/* Lobby/hub kompaktiskumo pataisa po lobby korteliu atnaujinimo.
+   Senas headerio fonas palikdavo dideli tuscia plota virs turinio, o
+   statistikos labeliai mazesniame plote persidengdavo. */
+.page.mainMenuPage > header {
+  height: 66px !important;
+  min-height: 66px !important;
+  max-height: 66px !important;
+  margin: -24px -24px 0 !important;
+  width: calc(100% + 48px) !important;
+  justify-self: stretch !important;
+  overflow: visible !important;
+}
+
+.page.mainMenuPage {
+  display: block !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+.page.mainMenuPage > header .topNav {
+  min-height: 50px !important;
+  padding: 8px 24px !important;
+}
+
+.page.mainMenuPage > .panel {
+  padding-top: 28px !important;
+  width: min(1200px, calc(100vw - 48px)) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  justify-self: center !important;
+}
+
+.page.mainMenuPage .menuStatsBar {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 0;
+  padding: 12px 10px !important;
+}
+
+.page.mainMenuPage .statSeg {
+  min-width: 0;
+  padding: 4px 10px;
+  overflow: hidden;
+}
+
+.page.mainMenuPage .statSegText {
+  min-width: 0;
+}
+
+.page.mainMenuPage .statSegLabel,
+.page.mainMenuPage .statSegValue {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+
+.page.mainMenuPage .statSegLabel {
+  white-space: normal;
+  line-height: 1.15;
+}
+
+.page.mainMenuPage .statSegValue {
+  line-height: 1.05;
+}
+
+.page.mainMenuPage .statSegEmblem {
+  justify-content: center;
+}
+
+@media (max-width: 900px) {
+  .page.mainMenuPage .menuStatsBar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page.mainMenuPage .statSeg:nth-child(odd) {
+    border-left: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .page.mainMenuPage > header {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    margin: -12px -12px 0 !important;
+  }
+
+  .page.mainMenuPage > header .topNav {
+    padding: 8px 12px !important;
+  }
+
+  .page.mainMenuPage > .panel {
+    padding-top: 18px !important;
+  }
+}
