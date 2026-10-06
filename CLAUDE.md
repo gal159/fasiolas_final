@@ -64,8 +64,8 @@ fazeje bandyk PLAY_CARD 0..n, fallback TAKE_OLDEST).
 
 ## Žaidimo tipai (gameType)
 
-- Kambarys turi `gameType: "fasiolas" | "nnn"` ("nnn" = 999, Shithead stiliaus).
-  Pasirenkamas jungikliu hub'e (`gameSwitch`), keliauja `create_room` payload'u
+- Kambarys turi `gameType: "fasiolas" | "nnn" | "durak"` ("nnn" = 999, Shithead stiliaus).
+  Pasirenkamas hub'e (`game-type-*` mygtukai), keliauja `create_room` payload'u
   (zod default `"fasiolas"` senu klientu suderinamumui) -> `GameRoom.gameType` ->
   `LobbySummary`/`PublicTableState`.
 - 999 praleidzia DEALING faze (dalinimas 3 aklos + 3 atverstos + 3 i ranka vyksta
@@ -78,6 +78,13 @@ fazeje bandyk PLAY_CARD 0..n, fallback TAKE_OLDEST).
   praleidimas pagal `nnnTotalCards` (ranka+atverstos+aklos), ne pagal ranka.
 - 4 tos pacios vertes kortos kruvos virsuje (gali buti keliu zaideju) sudegina
   kruva kaip 10 ir uzbaigejas eina dar karta (`nnnResolveAfterPilePlay`).
+- Kalades dydis: `GameRoom.deckSize: "full" | "short"` (52 / 7..A=32), `create_room` laukas `deckSize`
+  (Durak numatytai short, kiti full). `maxPlayersFor`: 999 short max 3, Durak 6 / short 5.
+  Fasiolas "+1" taisykle apsisuka A -> 7 (`nextRank(rank, deckSize)`).
+- Durak (perevodnoy): `GameRoom.durak` (`DurakRound`: pairs, attackerOrder, taking, attackLimit). Veiksmai
+  `DURAK_ATTACK/DEFEND/TRANSFER/TAKE/DONE`. Koziris = apatine kalades korta (`centerDeck[0]`).
+  `durakAdvanceAttackers` automatiskai praleidzia atakuotojus be galimo ejimo. Simuliacija:
+  `npx tsx scripts/test-durak-engine.ts` (360 partiju, abi kalades, invariantas 52/32).
 - Variklio simuliacija: `npx tsx scripts/test-nnn-engine.ts` (200 partiju su
   botais iki FINISHED + kortu apskaitos invariantas 52).
 
