@@ -10,7 +10,11 @@ export interface Card {
 export type GamePhase = "LOBBY" | "DEALING" | "PLAYING" | "FINISHED";
 
 // Zaidimo tipas: "fasiolas" - originalus zaidimas, "nnn" - "999" (Shithead stiliaus).
-export type GameType = "fasiolas" | "nnn";
+export type GameType = "fasiolas" | "nnn" | "durak";
+
+// Kalades dydis: "full" - 52 kortos (2..A), "short" - 32 kortos (7..A).
+export type DeckSize = "full" | "short";
+export const DECK_SIZES: DeckSize[] = ["full", "short"];
 
 // 999: magiskos kortos. 2 - limpa ant visko ir zaidejas deda dar; 3 - rodoma
 // zaidejui (niekada nededama i kruva); 10 - sudegina kruva ir zaidejas eina dar.
@@ -242,6 +246,30 @@ export interface PublicTableState {
   discardedCount?: number;
   // 999: laukiama taikinio atsakymo i parodyta trejeta.
   pendingThree?: PendingThreeState | null;
+  // Kalades dydis (nesant - "full").
+  deckSize?: DeckSize;
+  // Durak: viesa raundo busena.
+  durak?: DurakPublicState | null;
+}
+
+// Durak: viena atakos pora (gynybos korta null kol neatmusta).
+export interface DurakPair {
+  attack: Card;
+  defense: Card | null;
+}
+
+export interface DurakPublicState {
+  attackerId: string;
+  defenderId: string;
+  pairs: DurakPair[];
+  // Apatine kalades korta (nustato kozirį); null kai kalade jau issemta.
+  trumpCard: Card | null;
+  // Gynejas nusprende imti - kiti dar gali pridet kortu.
+  taking: boolean;
+  // Is zaidimo isbrauktu kortu skaicius.
+  discardedCount: number;
+  // Max kortu, kurias galima atakuoti siame raunde.
+  attackLimit: number;
 }
 
 export interface PendingFasiolasState {
@@ -302,7 +330,15 @@ export type NnnAction =
       blindIndex: number;
     };
 
-export type TurnAction = DealingAction | PlayingAction | NnnAction;
+// Durak (perevodnoy) veiksmai.
+export type DurakAction =
+  | { type: "DURAK_ATTACK"; cardIndex: number }
+  | { type: "DURAK_DEFEND"; cardIndex: number; pairIndex: number }
+  | { type: "DURAK_TRANSFER"; cardIndex: number }
+  | { type: "DURAK_TAKE" }
+  | { type: "DURAK_DONE" };
+
+export type TurnAction = DealingAction | PlayingAction | NnnAction | DurakAction;
 
 // Transliuojama kitiems kambario zaidejams, kad jie matytu kortos skridimo animacija.
 export interface ActionAnimatedEvent {

@@ -22,6 +22,8 @@ import {
   calcLevel,
   type Card,
   type ClientStatePayload,
+  type DeckSize,
+  type GameType,
   type PlayerAccountState,
   type PlayerCardInfo,
   type PlayerProfile,
@@ -168,17 +170,32 @@ type LobbySummary = {
   playerCount: number
   hasPassword: boolean
   // Nebutinas (seni serveriai lauko nesiuncia) - tada fasiolas.
-  gameType?: 'fasiolas' | 'nnn'
+  gameType?: GameType
+  // Nebutinas (seni serveriai lauko nesiuncia) - tada pilna kalade.
+  deckSize?: DeckSize
 }
 
-const GAME_TYPE_LABELS: Record<'fasiolas' | 'nnn', string> = {
+const GAME_TYPE_LABELS: Record<GameType, string> = {
   fasiolas: 'Fasiolas',
   nnn: '999',
+  durak: 'Durak',
 }
 
-const GAME_TYPE_MAX_PLAYERS: Record<'fasiolas' | 'nnn', number> = {
-  fasiolas: 8,
-  nnn: 5,
+const GAME_TYPES: GameType[] = ['fasiolas', 'nnn', 'durak']
+
+const DECK_SIZE_LABELS: Record<DeckSize, string> = {
+  full: 'Pilna kalade (52)',
+  short: '7 - A (32)',
+}
+
+function maxPlayersFor(gameType: GameType, deckSize: DeckSize): number {
+  if (gameType === 'nnn') {
+    return deckSize === 'short' ? 3 : 5
+  }
+  if (gameType === 'durak') {
+    return deckSize === 'short' ? 5 : 6
+  }
+  return 8
 }
 
 type LeaderboardEntry = {
@@ -659,7 +676,8 @@ function App() {
   const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null)
   const [isRevealedCardDragged, setIsRevealedCardDragged] = useState(false)
   // 999: zaidimo tipo jungiklis kambario kurimui ir rankos multi-select.
-  const [selectedGameType, setSelectedGameType] = useState<'fasiolas' | 'nnn'>('fasiolas')
+  const [selectedGameType, setSelectedGameType] = useState<GameType>('fasiolas')
+  const [selectedDeckSize, setSelectedDeckSize] = useState<DeckSize>('full')
   const [selectedHandIndexes, setSelectedHandIndexes] = useState<number[]>([])
   const [playingHandSortMode, setPlayingHandSortMode] = useState<PlayingHandSortMode>('suit')
   const [flyingPlayedCard, setFlyingPlayedCard] = useState<{
@@ -1186,6 +1204,12 @@ function App() {
   }, [payload?.state.currentTurnPlayerId, payload?.state.turnStartedAt, payload?.state.turnTimerDurationMs, turnNow])
 
   const isNnn = (payload?.state.gameType ?? 'fasiolas') === 'nnn'
+  const isDurak = (payload?.state.gameType ?? 'fasiolas') === 'durak'
+  const durakState = payload?.state.durak ?? null
+  const iAmDurakDefender = Boolean(durakState && payload && durakState.defenderId === payload.yourPlayerId)
+  const durakUndefendedCount = durakState ? durakState.pairs.filter((pair) => !pair.defense).length : 0
+  const selectedDurakIndex = selectedHandIndexes[0] ?? null
+  const selectedDurakCard = payload && selectedDurakIndex !== null ? (payload.yourHand[selectedDurakIndex] ?? null) : null
 
   // 999: pazymetos kortos nurodomos indeksais - rankai pasikeitus jos nebegalioja.
   const handSignature = payload ? payload.yourHand.map((c) => `${c.rank}${c.suit}`).join(',') : ''
@@ -1624,6 +1648,7 @@ function App() {
         password: roomPasswordInput.trim() || undefined,
         profile: withSlot(profileDraft, activeProfileSlot),
         gameType: selectedGameType,
+        deckSize: selectedDeckSize,
       },
       (response) => {
       setRoomCode(response.roomCode as string)
@@ -1891,7 +1916,14 @@ function App() {
     } else if (info.actionType === 'MOVE_VISIBLE_CARD') {
       source = cardOfSeat(seatOf(info.actorPlayerId))
       target = cardOfSeat(seatOf(info.toPlayerId))
-    } else if (info.actionType === 'PLAY_CARD' || info.actionType === 'PLAY_CARDS' || info.actionType === 'PLAY_BLIND') {
+    } else if (
+      info.actionType === 'PLAY_CARD' ||
+      info.actionType === 'PLAY_CARDS' ||
+      info.actionType === 'PLAY_BLIND' ||
+      info.actionType === 'DURAK_ATTACK' ||
+      info.actionType === 'DURAK_DEFEND' ||
+      info.actionType === 'DURAK_TRANSFER'
+    ) {
       source = cardOfSeat(seatOf(info.actorPlayerId))
       target = centerArea
     } else if (info.actionType === 'TAKE_OLDEST' || info.actionType === 'TAKE_PILE') {
@@ -1924,7 +1956,14 @@ function App() {
       height: sourceRect.height,
     }
 
-    if (info.actionType === 'PLAY_CARD' || info.actionType === 'PLAY_CARDS' || info.actionType === 'PLAY_BLIND') {
+    if (
+      info.actionType === 'PLAY_CARD' ||
+      info.actionType === 'PLAY_CARDS' ||
+      info.actionType === 'PLAY_BLIND' ||
+      info.actionType === 'DURAK_ATTACK' ||
+      info.actionType === 'DURAK_DEFEND' ||
+      info.actionType === 'DURAK_TRANSFER'
+    ) {
       setFlyingPlayedCard(fly)
       window.setTimeout(() => setFlyingPlayedCard(null), 330)
     } else {
@@ -2011,7 +2050,11 @@ function App() {
       return
     }
 
-    if (isNnn) {
+    if (isDurak) {
+      if (!iAmDurakDefender) {
+        sendAction({ type: 'DURAK_ATTACK', cardIndex: draggedCardIndex })
+      }
+    } else if (isNnn) {
       sendAction({ type: 'PLAY_CARDS', cardIndexes: [draggedCardIndex] })
     } else {
       sendAction({ type: 'PLAY_CARD', cardIndex: draggedCardIndex })
@@ -2101,6 +2144,50 @@ function App() {
       sendAction(playAction)
       setFlyingPlayedCard(null)
     }, 330)
+  }
+
+  // Durak: atakuotojas deda korta is karto, gynejas pirma pazymi korta.
+  function handleDurakHandClick(index: number): void {
+    if (!payload || !isMyTurn || !durakState) {
+      return
+    }
+    if (iAmDurakDefender) {
+      setSelectedHandIndexes((current) => (current[0] === index ? [] : [index]))
+      return
+    }
+    setSelectedHandIndexes([])
+    sendAction({ type: 'DURAK_ATTACK', cardIndex: index })
+  }
+
+  function handleDurakPairClick(pairIndex: number): void {
+    if (!payload || !isMyTurn || !iAmDurakDefender || selectedDurakIndex === null) {
+      return
+    }
+    const pair = durakState?.pairs[pairIndex]
+    if (!pair || pair.defense) {
+      return
+    }
+    setSelectedHandIndexes([])
+    sendAction({ type: 'DURAK_DEFEND', cardIndex: selectedDurakIndex, pairIndex })
+  }
+
+  function durakHintText(): string {
+    if (!payload || !durakState) {
+      return ''
+    }
+    const turnName = payload.state.players.find((p) => p.id === payload.state.currentTurnPlayerId)?.name ?? 'Zaidejas'
+    if (!isMyTurn) {
+      return `Laukiama: ${turnName}`
+    }
+    if (iAmDurakDefender) {
+      return 'Pazymek korta ir spausk ant atakos kortos. Arba perkelk / imk.'
+    }
+    if (durakState.pairs.length === 0) {
+      return 'Pasirink korta atakai'
+    }
+    return durakState.taking
+      ? 'Gynejas ims - gali prideti tokios pat vertes kortu'
+      : 'Pridek tokios pat vertes korta arba spausk "Bita"'
   }
 
   function renderVisualCard(card: Card, compact = false) {
@@ -3141,25 +3228,36 @@ function App() {
               </div>
             </div>
 
-            <div className="gameTypeSwitchRow">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={selectedGameType === 'nnn'}
-                aria-label="Zaidimo tipas"
-                className={selectedGameType === 'nnn' ? 'gameSwitch on' : 'gameSwitch'}
-                onClick={() => setSelectedGameType((current) => (current === 'nnn' ? 'fasiolas' : 'nnn'))}
-              >
-                <span className={selectedGameType === 'fasiolas' ? 'gameSwitchLabel left lit' : 'gameSwitchLabel left'}>
-                  Fasiolas
-                </span>
-                <span className="gameSwitchTrack" aria-hidden="true">
-                  <span className="gameSwitchThumb" />
-                </span>
-                <span className={selectedGameType === 'nnn' ? 'gameSwitchLabel right lit' : 'gameSwitchLabel right'}>
-                  999
-                </span>
-              </button>
+            <div className="gameTypeSwitchRow gameTypePicker" role="radiogroup" aria-label="Zaidimo tipas">
+              {GAME_TYPES.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  role="radio"
+                  aria-checked={selectedGameType === type}
+                  className={selectedGameType === type ? 'gameTypeOption active' : 'gameTypeOption'}
+                  onClick={() => {
+                    setSelectedGameType(type)
+                    setSelectedDeckSize(type === 'durak' ? 'short' : 'full')
+                  }}
+                >
+                  {GAME_TYPE_LABELS[type]}
+                </button>
+              ))}
+            </div>
+            <div className="gameTypeSwitchRow gameTypePicker deckSizePicker" role="radiogroup" aria-label="Kalade">
+              {(['full', 'short'] as DeckSize[]).map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  role="radio"
+                  aria-checked={selectedDeckSize === size}
+                  className={selectedDeckSize === size ? 'gameTypeOption active' : 'gameTypeOption'}
+                  onClick={() => setSelectedDeckSize(size)}
+                >
+                  {DECK_SIZE_LABELS[size]}
+                </button>
+              ))}
             </div>
 
             <div className="menuStatsBar">
@@ -3206,7 +3304,7 @@ function App() {
               <ul className="lobbyListRows">
                 {lobbies.map((lobby) => {
                   const gameType = lobby.gameType ?? 'fasiolas'
-                  const maxPlayers = GAME_TYPE_MAX_PLAYERS[gameType]
+                  const maxPlayers = maxPlayersFor(gameType, lobby.deckSize ?? 'full')
                   const isFull = lobby.playerCount >= maxPlayers
                   const isUnlocking = unlockingRoomCode === lobby.roomCode
                   const seatsClass = isFull ? 'lobbySeatsPill full' : lobby.playerCount >= maxPlayers - 1 ? 'lobbySeatsPill warm' : 'lobbySeatsPill'
@@ -3222,8 +3320,8 @@ function App() {
                           </span>
                           <span className="lobbyCardCode">#{lobby.roomCode}</span>
                         </div>
-                        <span className={gameType === 'nnn' ? 'lobbyGameBadge nnn' : 'lobbyGameBadge'}>
-                          {GAME_TYPE_LABELS[gameType]}
+                        <span className={gameType === 'fasiolas' ? 'lobbyGameBadge' : `lobbyGameBadge ${gameType}`}>
+                          {GAME_TYPE_LABELS[gameType]} {lobby.deckSize === 'short' ? '7-A' : ''}
                         </span>
                         <span className={seatsClass} aria-label={`Zaidejai: ${lobby.playerCount} is ${maxPlayers}`}>
                           <span aria-hidden="true">&#128101;</span> {lobby.playerCount}/{maxPlayers}
@@ -3498,6 +3596,95 @@ function App() {
                 </div>
               ) : null}
 
+              {payload.state.phase === 'PLAYING' && isDurak && durakState ? (
+                <div className="playingActionDock durakActionDock">
+                  <strong>Durak: {iAmDurakDefender ? 'tu gynies' : 'tu atakuoji'}</strong>
+                  <span className="nnnPileHint">{durakHintText()}</span>
+                  <div className="playingActionSortRow">
+                    <button
+                      type="button"
+                      className={playingHandSortMode === 'suit' ? 'playingSortButton active' : 'playingSortButton'}
+                      onClick={() => setPlayingHandSortMode('suit')}
+                    >
+                      Rikiuoti pagal zenkla
+                    </button>
+                    <button
+                      type="button"
+                      className={playingHandSortMode === 'rank' ? 'playingSortButton active' : 'playingSortButton'}
+                      onClick={() => setPlayingHandSortMode('rank')}
+                    >
+                      Rikiuoti pagal verte
+                    </button>
+                  </div>
+                  <div className="playingActionCards">
+                    {sortedPlayingHand.map(({ card, index }) => {
+                      const selected = selectedHandIndexes.includes(index)
+                      return (
+                        <button
+                          key={`durak-dock-${card.rank}${card.suit}-${index}`}
+                          type="button"
+                          className={[
+                            'playingActionCardPick',
+                            'nnnCardPick',
+                            card.suit === payload.state.trumpSuit ? 'durakTrumpCard' : '',
+                            selected ? 'selected' : '',
+                          ].filter(Boolean).join(' ')}
+                          disabled={!isMyTurn || Boolean(flyingPlayedCard)}
+                          onClick={() => handleDurakHandClick(index)}
+                          title={cardLabel(card)}
+                        >
+                          {renderVisualCard(card, true)}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div className="durakButtonRow">
+                    {iAmDurakDefender ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={!isMyTurn || durakState.taking || durakUndefendedCount === 0}
+                          onClick={() => sendAction({ type: 'DURAK_TAKE' })}
+                        >
+                          Imu
+                        </button>
+                        <button
+                          type="button"
+                          disabled={
+                            !isMyTurn ||
+                            durakState.taking ||
+                            !selectedDurakCard ||
+                            durakUndefendedCount !== durakState.pairs.length ||
+                            selectedDurakCard.rank !== durakState.pairs[0]?.attack.rank
+                          }
+                          onClick={() => {
+                            if (selectedDurakIndex === null) {
+                              return
+                            }
+                            setSelectedHandIndexes([])
+                            sendAction({ type: 'DURAK_TRANSFER', cardIndex: selectedDurakIndex })
+                          }}
+                        >
+                          Perkelti
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={
+                          !isMyTurn ||
+                          durakState.pairs.length === 0 ||
+                          (!durakState.taking && durakUndefendedCount > 0)
+                        }
+                        onClick={() => sendAction({ type: 'DURAK_DONE' })}
+                      >
+                        {durakState.taking ? 'Pakanka' : 'Bita'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
               {payload.state.phase === 'PLAYING' && isNnn ? (
                 <div className="playingActionDock nnnActionDock">
                   <strong>999: zaidimas</strong>
@@ -3619,7 +3806,7 @@ function App() {
                 </div>
               ) : null}
 
-              {payload.state.phase === 'PLAYING' && !isNnn ? (
+              {payload.state.phase === 'PLAYING' && !isNnn && !isDurak ? (
                 <div className="playingActionDock">
                   <strong>2 dalis: zaidimas</strong>
                   <div className="playingActionSortRow">
@@ -3711,7 +3898,52 @@ function App() {
                   </div>
                 ) : null}
 
-                {payload.state.phase === 'PLAYING' ? (
+                {payload.state.phase === 'PLAYING' && isDurak && durakState ? (
+                  <div className="durakTable" aria-label="Durak stalas">
+                    <div className="durakDeckBox">
+                      {durakState.trumpCard ? (
+                        <span className="durakTrumpCardWrap" title="Kozirio korta">
+                          {renderVisualCard(durakState.trumpCard, true)}
+                        </span>
+                      ) : payload.state.trumpSuit ? (
+                        <span className={`durakTrumpSuit ${cardColorClass(payload.state.trumpSuit)}`}>
+                          Koziris {suitSymbol(payload.state.trumpSuit)}
+                        </span>
+                      ) : null}
+                      <span className="nnnPileInfo">
+                        Kalade: {payload.state.centerDeckCount} | Ismesta: {durakState.discardedCount}
+                      </span>
+                    </div>
+                    <div className="durakPairs">
+                      {durakState.pairs.length === 0 ? (
+                        <span className="nnnEmptyPile">Stalas tuscias</span>
+                      ) : null}
+                      {durakState.pairs.map((pair, pairIndex) => {
+                        const canTarget = isMyTurn && iAmDurakDefender && !pair.defense && selectedDurakCard !== null
+                        return (
+                          <button
+                            key={`durak-pair-${pairIndex}-${pair.attack.rank}${pair.attack.suit}`}
+                            type="button"
+                            className={['durakPair', pair.defense ? 'defended' : '', canTarget ? 'targetable' : ''].filter(Boolean).join(' ')}
+                            disabled={!canTarget}
+                            onClick={() => handleDurakPairClick(pairIndex)}
+                          >
+                            <span className="durakPairAttack">{renderVisualCard(pair.attack, true)}</span>
+                            {pair.defense ? (
+                              <span className="durakPairDefense">{renderVisualCard(pair.defense, true)}</span>
+                            ) : null}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <span className="durakRoles">
+                      Atakuoja: {payload.state.players.find((p) => p.id === durakState.attackerId)?.name} | Gynesi:{' '}
+                      {payload.state.players.find((p) => p.id === durakState.defenderId)?.name}
+                    </span>
+                  </div>
+                ) : null}
+
+                {payload.state.phase === 'PLAYING' && !isDurak ? (
                   <div className="tableCenterStack" aria-label="Stalo kortos">
                     {isNnn && payload.state.tableStack.length === 0 ? (
                       <span className="nnnEmptyPile">Kruva tuscia</span>
@@ -3967,7 +4199,7 @@ function App() {
           </section>
 
           {payload.state.phase === 'DEALING' ? renderDealingControls() : null}
-          {payload.state.phase === 'PLAYING' && !isNnn ? renderPlayingControls() : null}
+          {payload.state.phase === 'PLAYING' && !isNnn && !isDurak ? renderPlayingControls() : null}
 
           <section className="panel">
             <h2>Zaidimo zurnalas</h2>

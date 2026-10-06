@@ -8,6 +8,9 @@ import type {
   ClientStatePayload,
   DealingAction,
   EffectId,
+  DeckSize,
+  DurakAction,
+  DurakPair,
   GameType,
   HatId,
   NnnAction,
@@ -104,6 +107,21 @@ type GameRoom = {
   discardPile: Card[];
   pendingThree: PendingThreeState | null;
   lastChampionPlayerId: string | null;
+  deckSize: DeckSize;
+  durak: DurakRound | null;
+};
+
+type DurakRound = {
+  attackerId: string;
+  defenderId: string;
+  pairs: DurakPair[];
+  // Atakuotoju eile siame raunde (be gynejo) ir dabartine pozicija.
+  attackerOrder: string[];
+  attackerPos: number;
+  passes: number;
+  taking: boolean;
+  attackLimit: number;
+  discardedCount: number;
 };
 
 export type LobbySummary = {
@@ -112,10 +130,16 @@ export type LobbySummary = {
   playerCount: number;
   hasPassword: boolean;
   gameType: GameType;
+  deckSize: DeckSize;
 };
 
 const SUITS: Suit[] = ["S", "H", "D", "C"];
 const RANKS: Rank[] = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
+const SHORT_RANKS: Rank[] = ["7", "8", "9", "10", "J", "Q", "K", "A"];
+
+function ranksFor(deckSize: DeckSize): Rank[] {
+  return deckSize === "short" ? SHORT_RANKS : RANKS;
+}
 const RANK_ORDER: Record<Rank, number> = {
   "2": 2,
   "3": 3,
@@ -270,13 +294,14 @@ function isValidShopItem(type: ShopItemType, itemId: ShopItemId): boolean {
   return EFFECT_OPTIONS.includes(itemId as EffectId);
 }
 
-function nextRank(rank: Rank): Rank {
-  const index = RANKS.indexOf(rank);
+function nextRank(rank: Rank, deckSize: DeckSize = "full"): Rank {
+  const ranks = ranksFor(deckSize);
+  const index = ranks.indexOf(rank);
   if (index < 0) {
     return rank;
   }
-  const nextIndex = (index + 1) % RANKS.length;
-  return RANKS[nextIndex];
+  const nextIndex = (index + 1) % ranks.length;
+  return ranks[nextIndex];
 }
 
 function shuffleDeck(deck: Card[]): Card[] {
@@ -290,21 +315,29 @@ function shuffleDeck(deck: Card[]): Card[] {
   return arr;
 }
 
-function createDeck(): Card[] {
+function createDeck(deckSize: DeckSize = "full"): Card[] {
   const cards: Card[] = [];
   for (const suit of SUITS) {
-    for (const rank of RANKS) {
+    for (const rank of ranksFor(deckSize)) {
       cards.push({ suit, rank });
     }
   }
   return shuffleDeck(cards);
 }
 
-function canApplyPlusOne(baseTop: Card | null, cardToPlace: Card): boolean {
+// Durak: ar defense korta numusa attack (ta pati masti didesne arba koziris ant ne-kozirio).
+function durakCanBeat(attack: Card, defense: Card, trumpSuit: Suit | null): boolean {
+  if (defense.suit === attack.suit) {
+    return RANK_ORDER[defense.rank] > RANK_ORDER[attack.rank];
+  }
+  return defense.suit === trumpSuit && attack.suit !== trumpSuit;
+}
+
+function canApplyPlusOne(baseTop: Card | null, cardToPlace: Card, deckSize: DeckSize = "full"): boolean {
   if (!baseTop) {
     return true;
   }
-  const expected = nextRank(baseTop.rank);
+  const expected = nextRank(baseTop.rank, deckSize);
   return expected === cardToPlace.rank;
 }
 
@@ -318,6 +351,9 @@ function isHigherSameSuit(base: Card, candidate: Card): boolean {
 // ---------------------------------------------------------------------------
 
 const NNN_MAX_PLAYERS = 5;
+const DURAK_HAND_SIZE = 6;
+const DURAK_MAX_PLAYERS = 6;
+const DURAK_MAX_PLAYERS_SHORT = 5;
 const NNN_HAND_SIZE = 3;
 
 function isNnnMagic(rank: Rank): boolean {
@@ -437,6 +473,9 @@ export class GameEngine {
     if (action.type === "PLAY_BLIND") {
       return { ...base, actionType: action.type, toPlayerId: null, card: actor.blindCards[action.blindIndex] ?? null };
     }
+    if (action.type === "DURAK_ATTACK" || action.type === "DURAK_TRANSFER" || action.type === "DURAK_DEFEND") {
+      return { ...base, actionType: action.type, toPlayerId: null, card: actor.cards[action.cardIndex] ?? null };
+    }
     return null;
   }
 
@@ -530,6 +569,14 @@ export class GameEngine {
         return false;
       }
       this.applyTurnAction(roomCode, bot.id, this.decideBotNnnAction(room, bot));
+      return true;
+    }
+
+    if (room.gameType === "durak") {
+      if (room.phase !== "PLAYING") {
+        return false;
+      }
+      this.applyTurnAction(roomCode, bot.id, this.decideDurakAction(room, bot, false));
       return true;
     }
 
@@ -632,6 +679,12 @@ export class GameEngine {
     }
 
     try {
+      if (room.gameType === "durak") {
+        this.applyTurnAction(roomCode, player.id, this.decideDurakAction(room, player, true));
+        room.dealerLog.push(`${player.name} praleido laika - atliktas automatinis ejimas`);
+        return true;
+      }
+
       if (room.gameType === "nnn") {
         this.applyTurnAction(roomCode, player.id, this.decideTimeoutNnnAction(room, player));
         room.dealerLog.push(`${player.name} praleido laika - atliktas automatinis ejimas`);
@@ -708,14 +761,14 @@ export class GameEngine {
     // 1. Jei jau atversta korta - padeti pagal taisykles: kitam, jei +1 legalu.
     if (room.revealedDrawCard) {
       const drawn = room.revealedDrawCard;
-      const plusOneTarget = others.find((p) => canApplyPlusOne(p.cards[p.cards.length - 1] ?? null, drawn));
+      const plusOneTarget = others.find((p) => canApplyPlusOne(p.cards[p.cards.length - 1] ?? null, drawn, room.deckSize));
       return { type: "PLACE_REVEALED", toPlayerId: plusOneTarget?.id ?? bot.id };
     }
 
     // 2. Jei sava virsutine korta legaliai limpa kitam (+1) - perkelti.
     const botTop = bot.cards[bot.cards.length - 1] ?? null;
     if (botTop) {
-      const moveTarget = others.find((p) => canApplyPlusOne(p.cards[p.cards.length - 1] ?? null, botTop));
+      const moveTarget = others.find((p) => canApplyPlusOne(p.cards[p.cards.length - 1] ?? null, botTop, room.deckSize));
       if (moveTarget) {
         return { type: "MOVE_VISIBLE_CARD", toPlayerId: moveTarget.id };
       }
@@ -761,7 +814,7 @@ export class GameEngine {
         continue;
       }
       const candidateTop = candidate.cards[candidate.cards.length - 1] ?? null;
-      if (canApplyPlusOne(candidateTop, card)) {
+      if (canApplyPlusOne(candidateTop, card, room.deckSize)) {
         return candidate.id;
       }
     }
@@ -804,7 +857,13 @@ export class GameEngine {
     hostName: string,
     socketId: string,
     profile?: PlayerProfile,
-    options?: { authUserId?: string | null; registeredAt?: number; password?: string | null; gameType?: GameType },
+    options?: {
+      authUserId?: string | null;
+      registeredAt?: number;
+      password?: string | null;
+      gameType?: GameType;
+      deckSize?: DeckSize;
+    },
   ): { roomCode: string; playerId: string } {
     const roomCode = Math.random().toString(36).slice(2, 8).toUpperCase();
     const playerId = randomUUID();
@@ -813,6 +872,8 @@ export class GameEngine {
     this.rooms.set(roomCode, {
       code: roomCode,
       gameType: options?.gameType ?? "fasiolas",
+      deckSize: options?.deckSize ?? (options?.gameType === "durak" ? "short" : "full"),
+      durak: null,
       tableId: playerProfile.tableId,
       turnStartedAt: null,
       players: [
@@ -854,7 +915,15 @@ export class GameEngine {
   }
 
   private maxPlayersFor(room: GameRoom): number {
-    return room.gameType === "nnn" ? NNN_MAX_PLAYERS : 8;
+    const short = room.deckSize === "short";
+    if (room.gameType === "nnn") {
+      // 9 kortos kiekvienam: 32 kortu kalade pakanka tik 3 zaidejams.
+      return short ? 3 : NNN_MAX_PLAYERS;
+    }
+    if (room.gameType === "durak") {
+      return short ? DURAK_MAX_PLAYERS_SHORT : DURAK_MAX_PLAYERS;
+    }
+    return 8;
   }
 
   private resetTurnTimer(room: GameRoom): void {
@@ -875,6 +944,7 @@ export class GameEngine {
         playerCount: room.players.length,
         hasPassword: Boolean(room.password),
         gameType: room.gameType,
+        deckSize: room.deckSize,
       });
     }
     return lobbies;
@@ -1031,13 +1101,20 @@ export class GameEngine {
     if (room.players.length < 2) {
       throw new Error("Need at least 2 players");
     }
+    if (room.players.length > this.maxPlayersFor(room)) {
+      throw new Error(`Per daug zaideju sio tipo zaidimui su ${room.deckSize === "short" ? "32" : "52"} kortu kalade`);
+    }
     if (room.gameType === "nnn") {
       this.startNnnGame(room);
       return;
     }
+    if (room.gameType === "durak") {
+      this.startDurakGame(room);
+      return;
+    }
     room.tableId = chooseRoomTableId(room.players);
     room.phase = "DEALING";
-    room.centerDeck = createDeck();
+    room.centerDeck = createDeck(room.deckSize);
     room.revealedDrawCard = null;
     room.tableStack = [];
     room.trumpSuit = null;
@@ -1073,7 +1150,7 @@ export class GameEngine {
   private startNnnGame(room: GameRoom): void {
     room.tableId = chooseRoomTableId(room.players);
     room.phase = "PLAYING";
-    room.centerDeck = createDeck();
+    room.centerDeck = createDeck(room.deckSize);
     room.revealedDrawCard = null;
     room.tableStack = [];
     room.trumpSuit = null;
@@ -1138,6 +1215,11 @@ export class GameEngine {
         throw new Error("Game is not active");
       }
       this.applyNnnAction(room, actorPlayerId, action as NnnAction);
+    } else if (room.gameType === "durak") {
+      if (room.phase !== "PLAYING") {
+        throw new Error("Game is not active");
+      }
+      this.applyDurakAction(room, actorPlayerId, action as DurakAction);
     } else if (room.phase === "DEALING") {
       this.applyDealingAction(room, actorPlayerId, action as DealingAction);
       this.tryTransitionToPlaying(room);
@@ -1409,6 +1491,7 @@ export class GameEngine {
     }
 
     const isNnn = room.gameType === "nnn";
+    const isDurak = room.gameType === "durak";
 
     return {
       yourPlayerId: viewer.id,
@@ -1423,7 +1506,7 @@ export class GameEngine {
           name: p.name,
           cardCount: p.cards.length,
           // 999: rankos kortos slaptos - virsutines NIEKADA nerodom.
-          topCard: isNnn ? null : (p.cards[p.cards.length - 1] ?? null),
+          topCard: isNnn || isDurak ? null : (p.cards[p.cards.length - 1] ?? null),
           profile: p.profile,
           isBot: p.isBot,
           connected: p.connected,
@@ -1448,6 +1531,18 @@ export class GameEngine {
         turnTimerDurationMs: TURN_TIMER_DURATION_MS,
         discardedCount: room.discardPile.length,
         pendingThree: room.pendingThree,
+        deckSize: room.deckSize,
+        durak: room.durak
+          ? {
+              attackerId: room.durak.attackerId,
+              defenderId: room.durak.defenderId,
+              pairs: room.durak.pairs.map((pair) => ({ attack: pair.attack, defense: pair.defense })),
+              trumpCard: room.centerDeck[0] ?? null,
+              taking: room.durak.taking,
+              discardedCount: room.durak.discardedCount,
+              attackLimit: room.durak.attackLimit,
+            }
+          : null,
       },
     };
   }
@@ -1522,7 +1617,7 @@ export class GameEngine {
       }
 
       const targetTop = target.cards[target.cards.length - 1] ?? null;
-      const legalPlusOne = canApplyPlusOne(targetTop, movingCard);
+      const legalPlusOne = canApplyPlusOne(targetTop, movingCard, room.deckSize);
 
       actor.cards.pop();
       target.cards.push(movingCard);
@@ -1538,7 +1633,7 @@ export class GameEngine {
         actorTop !== null &&
         room.players
           .filter((p) => p.id !== actorPlayerId)
-          .some((p) => canApplyPlusOne(p.cards[p.cards.length - 1] ?? null, actorTop));
+          .some((p) => canApplyPlusOne(p.cards[p.cards.length - 1] ?? null, actorTop, room.deckSize));
 
       const drawn = room.centerDeck.pop();
       if (!drawn) {
@@ -1562,20 +1657,20 @@ export class GameEngine {
 
       const target = this.getPlayerOrThrow(room, action.toPlayerId);
       const targetTop = target.cards[target.cards.length - 1] ?? null;
-      const legalPlusOne = canApplyPlusOne(targetTop, drawn);
+      const legalPlusOne = canApplyPlusOne(targetTop, drawn, room.deckSize);
 
       if (target.id === actorPlayerId) {
         const actorTopBeforePlace = actor.cards[actor.cards.length - 1] ?? null;
         const hadNoCardsBeforePlace = actor.cards.length === 0;
         const canPlaceToOthers = room.players
           .filter((p) => p.id !== actorPlayerId)
-          .some((p) => canApplyPlusOne(p.cards[p.cards.length - 1] ?? null, drawn));
+          .some((p) => canApplyPlusOne(p.cards[p.cards.length - 1] ?? null, drawn, room.deckSize));
 
         actor.cards.push(drawn);
         room.revealedDrawCard = null;
         this.recordLastAction(room, actorPlayerId, canPlaceToOthers ? "SHOULD_HAVE_PLACED_TO_OTHER" : null, action.type);
 
-        if (hadNoCardsBeforePlace || !canApplyPlusOne(actorTopBeforePlace, drawn)) {
+        if (hadNoCardsBeforePlace || !canApplyPlusOne(actorTopBeforePlace, drawn, room.deckSize)) {
           this.advanceTurn(room);
         }
       } else {
@@ -1644,6 +1739,425 @@ export class GameEngine {
       return;
     }
     this.advanceTurn(room);
+  }
+
+  // -------------------------------------------------------------------------
+  // Durak (perevodnoy) logika
+  // -------------------------------------------------------------------------
+
+  private startDurakGame(room: GameRoom): void {
+    room.tableId = chooseRoomTableId(room.players);
+    room.phase = "PLAYING";
+    room.centerDeck = createDeck(room.deckSize);
+    room.revealedDrawCard = null;
+    room.tableStack = [];
+    // Kozirio korta - apatine kalades korta (imama paskutine).
+    room.trumpSuit = room.centerDeck[0]?.suit ?? null;
+    room.lastNonSpadeDrawnSuit = null;
+    room.winnerPlayerIds = [];
+    room.loserPlayerId = null;
+    room.finalRankingPlayerIds = [];
+    room.pendingFasiolas = null;
+    room.pendingFasiolasCards = new Map();
+    room.lastAction = null;
+    room.matchRewards = null;
+    room.discardPile = [];
+    room.pendingThree = null;
+    room.durak = null;
+    room.dealerLog = ["Prasidejo Durak zaidimas"];
+
+    for (const p of room.players) {
+      p.cards = [];
+      p.faceUpCards = [];
+      p.blindCards = [];
+      this.durakDrawUp(room, p);
+    }
+
+    // Pirmas atakuoja zaidejas su maziausiu koziriu; jei nieko - atsitiktinis.
+    let starter: InternalPlayer | null = null;
+    let lowest = Infinity;
+    for (const p of room.players) {
+      for (const c of p.cards) {
+        if (c.suit === room.trumpSuit && RANK_ORDER[c.rank] < lowest) {
+          lowest = RANK_ORDER[c.rank];
+          starter = p;
+        }
+      }
+    }
+    starter = starter ?? room.players[Math.floor(Math.random() * room.players.length)];
+    room.dealerLog.push(`Pirmas atakuoja ${starter.name}`);
+    this.durakBeginBout(room, starter.id, 0);
+  }
+
+  private durakDrawUp(room: GameRoom, player: InternalPlayer): void {
+    while (room.centerDeck.length > 0 && player.cards.length < DURAK_HAND_SIZE) {
+      const card = room.centerDeck.pop();
+      if (!card) break;
+      player.cards.push(card);
+    }
+  }
+
+  // Zaidejai pagal sedejimo eile pradedant nuo startId (imtinai), tik turintys kortu.
+  private durakOrderFrom(room: GameRoom, startId: string): InternalPlayer[] {
+    const idx = room.players.findIndex((p) => p.id === startId);
+    if (idx < 0) {
+      return [];
+    }
+    const ordered: InternalPlayer[] = [];
+    for (let i = 0; i < room.players.length; i += 1) {
+      const p = room.players[(idx + i) % room.players.length];
+      if (i === 0 || p.cards.length > 0) {
+        ordered.push(p);
+      }
+    }
+    return ordered;
+  }
+
+  private durakNextActive(room: GameRoom, fromId: string): InternalPlayer | null {
+    const order = this.durakOrderFrom(room, fromId);
+    return order.find((p) => p.id !== fromId) ?? null;
+  }
+
+  private durakBeginBout(room: GameRoom, attackerId: string, discardedCount: number): void {
+    const defender = this.durakNextActive(room, attackerId);
+    if (!defender) {
+      this.durakFinish(room);
+      return;
+    }
+    const attackerOrder = this.durakOrderFrom(room, attackerId)
+      .filter((p) => p.id !== defender.id)
+      .map((p) => p.id);
+    room.durak = {
+      attackerId,
+      defenderId: defender.id,
+      pairs: [],
+      attackerOrder,
+      attackerPos: 0,
+      passes: 0,
+      taking: false,
+      attackLimit: Math.min(DURAK_HAND_SIZE, defender.cards.length),
+      discardedCount,
+    };
+    room.currentTurnPlayerId = attackerId;
+    this.resetTurnTimer(room);
+  }
+
+  private durakTableRanks(round: DurakRound): Set<Rank> {
+    const ranks = new Set<Rank>();
+    for (const pair of round.pairs) {
+      ranks.add(pair.attack.rank);
+      if (pair.defense) {
+        ranks.add(pair.defense.rank);
+      }
+    }
+    return ranks;
+  }
+
+  private durakCanAdd(room: GameRoom, round: DurakRound, player: InternalPlayer): boolean {
+    if (round.pairs.length === 0 || round.pairs.length >= round.attackLimit || player.cards.length === 0) {
+      return false;
+    }
+    const defender = this.getPlayerOrThrow(room, round.defenderId);
+    const undefended = round.pairs.filter((pair) => !pair.defense).length;
+    if (!round.taking && undefended + 1 > defender.cards.length) {
+      return false;
+    }
+    const ranks = this.durakTableRanks(round);
+    return player.cards.some((c) => ranks.has(c.rank));
+  }
+
+  // Randa kita atakuotoja, kuris dar gali ka nors prideti; jei nieko - raundas baigiasi.
+  private durakAdvanceAttackers(room: GameRoom, round: DurakRound): void {
+    for (let guard = 0; guard < 64; guard += 1) {
+      const len = round.attackerOrder.length;
+      if (len === 0 || round.passes >= len) {
+        this.durakResolveBout(room, round.taking);
+        return;
+      }
+      const attackerId = round.attackerOrder[round.attackerPos % len];
+      const attacker = this.getPlayerOrThrow(room, attackerId);
+      if (this.durakCanAdd(room, round, attacker)) {
+        room.currentTurnPlayerId = attackerId;
+        this.resetTurnTimer(room);
+        return;
+      }
+      round.passes += 1;
+      round.attackerPos = (round.attackerPos + 1) % len;
+    }
+    this.durakResolveBout(room, round.taking);
+  }
+
+  private durakResolveBout(room: GameRoom, taken: boolean): void {
+    const round = room.durak;
+    if (!round) {
+      return;
+    }
+    const defender = this.getPlayerOrThrow(room, round.defenderId);
+    const tableCards = round.pairs.flatMap((pair) => (pair.defense ? [pair.attack, pair.defense] : [pair.attack]));
+    let discardedCount = round.discardedCount;
+    if (taken) {
+      defender.cards.push(...tableCards);
+      room.dealerLog.push(`${defender.name} pasieme ${tableCards.length} kortas`);
+    } else {
+      room.discardPile.push(...tableCards);
+      discardedCount += tableCards.length;
+      room.dealerLog.push("Bita - kortos isbrauktos");
+    }
+
+    // Papildymas: atakuotojai pirma (nuo pagrindinio), gynejas paskutinis.
+    const drawOrder = this.durakOrderFrom(room, round.attackerId).filter((p) => p.id !== defender.id);
+    // Zaidejai be kortu, bet dar neturintys vietos, i orda nepatenka - papildom ir juos.
+    for (const p of room.players) {
+      if (p.id !== defender.id && !drawOrder.includes(p)) {
+        drawOrder.push(p);
+      }
+    }
+    for (const p of [...drawOrder, defender]) {
+      this.durakDrawUp(room, p);
+    }
+
+    // Baigusieji (kalade tuscia, ranka tuscia) fiksuojami pagal baigimo tvarka.
+    if (room.centerDeck.length === 0) {
+      for (const p of room.players) {
+        if (p.cards.length === 0 && !room.finalRankingPlayerIds.includes(p.id)) {
+          room.finalRankingPlayerIds.push(p.id);
+          room.dealerLog.push(`${p.name} isejo is zaidimo`);
+        }
+      }
+    }
+
+    const active = room.players.filter((p) => p.cards.length > 0);
+    if (active.length <= 1) {
+      room.durak = { ...round, pairs: [], discardedCount };
+      this.durakFinish(room);
+      return;
+    }
+
+    const nextAttacker = taken || defender.cards.length === 0 ? this.durakNextActive(room, defender.id) : defender;
+    this.durakBeginBout(room, (nextAttacker ?? defender).id, discardedCount);
+  }
+
+  private durakFinish(room: GameRoom): void {
+    const loser = room.players.find((p) => p.cards.length > 0) ?? null;
+    room.phase = "FINISHED";
+    room.loserPlayerId = loser?.id ?? null;
+    const ranking = room.finalRankingPlayerIds.filter((id) => id !== loser?.id);
+    for (const p of room.players) {
+      if (p.id !== loser?.id && !ranking.includes(p.id)) {
+        ranking.push(p.id);
+      }
+    }
+    if (loser) {
+      ranking.push(loser.id);
+    }
+    room.finalRankingPlayerIds = ranking;
+    room.winnerPlayerIds = room.players.filter((p) => p.id !== loser?.id).map((p) => p.id);
+    room.dealerLog.push(loser ? `${loser.name} lieka durnius` : "Lygiosios - durnio nera");
+    room.currentTurnPlayerId = null;
+    room.pendingThree = null;
+    this.resetTurnTimer(room);
+    this.applyMatchRewards(room);
+  }
+
+  private applyDurakAction(room: GameRoom, actorPlayerId: string, action: DurakAction): void {
+    const round = room.durak;
+    if (!round) {
+      throw new Error("Durak raundas nepradetas");
+    }
+    const actor = this.getPlayerOrThrow(room, actorPlayerId);
+    const defender = this.getPlayerOrThrow(room, round.defenderId);
+    const isDefender = actorPlayerId === round.defenderId;
+
+    if (action.type === "DURAK_ATTACK") {
+      if (isDefender) {
+        throw new Error("Gynejas negali atakuoti");
+      }
+      if (action.cardIndex < 0 || action.cardIndex >= actor.cards.length) {
+        throw new Error("Invalid card index");
+      }
+      const card = actor.cards[action.cardIndex];
+      if (round.pairs.length === 0) {
+        if (actorPlayerId !== round.attackerId) {
+          throw new Error("Pirma korta deda pagrindinis atakuotojas");
+        }
+        if (defender.cards.length === 0) {
+          throw new Error("Gynejas neturi kortu");
+        }
+      } else {
+        if (round.pairs.length >= round.attackLimit) {
+          throw new Error("Pasiektas atakos limitas");
+        }
+        const undefended = round.pairs.filter((pair) => !pair.defense).length;
+        if (!round.taking && undefended + 1 > defender.cards.length) {
+          throw new Error("Gynejas neturi tiek kortu");
+        }
+        if (!this.durakTableRanks(round).has(card.rank)) {
+          throw new Error("Korta netinka - reikia tokios vertes kaip ant stalo");
+        }
+      }
+      actor.cards.splice(action.cardIndex, 1);
+      round.pairs.push({ attack: card, defense: null });
+      round.passes = 0;
+      room.dealerLog.push(`${actor.name} atakuoja ${card.rank}${card.suit}`);
+      if (round.taking) {
+        this.durakAdvanceAttackers(room, round);
+      } else {
+        room.currentTurnPlayerId = round.defenderId;
+        this.resetTurnTimer(room);
+      }
+      return;
+    }
+
+    if (action.type === "DURAK_DEFEND") {
+      if (!isDefender || round.taking) {
+        throw new Error("Ginasi gali tik gynejas");
+      }
+      const pair = round.pairs[action.pairIndex];
+      if (!pair || pair.defense) {
+        throw new Error("Netinkama atakos korta");
+      }
+      if (action.cardIndex < 0 || action.cardIndex >= actor.cards.length) {
+        throw new Error("Invalid card index");
+      }
+      const card = actor.cards[action.cardIndex];
+      if (!durakCanBeat(pair.attack, card, room.trumpSuit)) {
+        throw new Error("Korta nenumusa atakos");
+      }
+      actor.cards.splice(action.cardIndex, 1);
+      pair.defense = card;
+      room.dealerLog.push(`${actor.name} atmusa ${pair.attack.rank}${pair.attack.suit} su ${card.rank}${card.suit}`);
+      if (round.pairs.every((p) => p.defense)) {
+        round.attackerPos = 0;
+        round.passes = 0;
+        this.durakAdvanceAttackers(room, round);
+      }
+      return;
+    }
+
+    if (action.type === "DURAK_TRANSFER") {
+      if (!isDefender || round.taking) {
+        throw new Error("Perkelti gali tik gynejas");
+      }
+      if (!round.pairs.every((p) => !p.defense)) {
+        throw new Error("Perkelti galima tik dar niekam neatsakius");
+      }
+      if (action.cardIndex < 0 || action.cardIndex >= actor.cards.length) {
+        throw new Error("Invalid card index");
+      }
+      const card = actor.cards[action.cardIndex];
+      if (card.rank !== round.pairs[0].attack.rank) {
+        throw new Error("Perkelti galima tokios pat vertes korta");
+      }
+      const next = this.durakNextActive(room, actorPlayerId);
+      if (!next || next.cards.length < round.pairs.length + 1 || round.pairs.length + 1 > DURAK_HAND_SIZE) {
+        throw new Error("Kitas zaidejas negali buti perkeltas - per mazai kortu");
+      }
+      actor.cards.splice(action.cardIndex, 1);
+      round.pairs.push({ attack: card, defense: null });
+      round.attackerId = actorPlayerId;
+      round.defenderId = next.id;
+      round.attackLimit = Math.min(DURAK_HAND_SIZE, next.cards.length);
+      round.attackerOrder = this.durakOrderFrom(room, actorPlayerId)
+        .filter((p) => p.id !== next.id)
+        .map((p) => p.id);
+      round.attackerPos = 0;
+      round.passes = 0;
+      room.currentTurnPlayerId = next.id;
+      this.resetTurnTimer(room);
+      room.dealerLog.push(`${actor.name} perkele ataka ${next.name}`);
+      return;
+    }
+
+    if (action.type === "DURAK_TAKE") {
+      if (!isDefender || round.taking) {
+        throw new Error("Imti gali tik gynejas");
+      }
+      if (!round.pairs.some((p) => !p.defense)) {
+        throw new Error("Nera ko imti");
+      }
+      round.taking = true;
+      round.attackerPos = 0;
+      round.passes = 0;
+      room.dealerLog.push(`${actor.name} ims kortas`);
+      this.durakAdvanceAttackers(room, round);
+      return;
+    }
+
+    if (action.type === "DURAK_DONE") {
+      if (isDefender) {
+        throw new Error("Gynejas negali baigti atakos");
+      }
+      if (round.pairs.length === 0) {
+        throw new Error("Pirma reikia atakuoti");
+      }
+      if (!round.taking && round.pairs.some((p) => !p.defense)) {
+        throw new Error("Laukiama gynejo");
+      }
+      round.passes += 1;
+      round.attackerPos = (round.attackerPos + 1) % Math.max(round.attackerOrder.length, 1);
+      this.durakAdvanceAttackers(room, round);
+      return;
+    }
+
+    throw new Error("Unsupported durak action");
+  }
+
+  // Boto/timeout sprendimas. timeout=true: paprasciausias saugus ejimas.
+  private decideDurakAction(room: GameRoom, player: InternalPlayer, timeout: boolean): DurakAction {
+    const round = room.durak;
+    if (!round) {
+      throw new Error("Durak raundas nepradetas");
+    }
+    const trump = room.trumpSuit;
+    const byCost = (a: Card, b: Card): number => {
+      const ta = a.suit === trump ? 100 : 0;
+      const tb = b.suit === trump ? 100 : 0;
+      return ta + RANK_ORDER[a.rank] - (tb + RANK_ORDER[b.rank]);
+    };
+
+    if (player.id === round.defenderId) {
+      if (timeout) {
+        return { type: "DURAK_TAKE" };
+      }
+      const pairIndex = round.pairs.findIndex((p) => !p.defense);
+      const target = round.pairs[pairIndex];
+      if (target) {
+        // Perkelimas: tokios pat vertes ne koziris, kai kitas zaidejas turi pakankamai kortu.
+        if (round.pairs.every((p) => !p.defense) && Math.random() < 0.5) {
+          const next = this.durakNextActive(room, player.id);
+          const idx = player.cards.findIndex((c) => c.rank === target.attack.rank && c.suit !== trump);
+          if (idx >= 0 && next && next.cards.length >= round.pairs.length + 1 && round.pairs.length + 1 <= DURAK_HAND_SIZE) {
+            return { type: "DURAK_TRANSFER", cardIndex: idx };
+          }
+        }
+        const options = player.cards
+          .map((card, index) => ({ card, index }))
+          .filter(({ card }) => durakCanBeat(target.attack, card, trump))
+          .sort((a, b) => byCost(a.card, b.card));
+        if (options.length > 0) {
+          return { type: "DURAK_DEFEND", cardIndex: options[0].index, pairIndex };
+        }
+      }
+      return { type: "DURAK_TAKE" };
+    }
+
+    if (round.pairs.length === 0) {
+      const sorted = player.cards.map((card, index) => ({ card, index })).sort((a, b) => byCost(a.card, b.card));
+      return { type: "DURAK_ATTACK", cardIndex: sorted[0]?.index ?? 0 };
+    }
+
+    if (timeout) {
+      return { type: "DURAK_DONE" };
+    }
+    const ranks = this.durakTableRanks(round);
+    const options = player.cards
+      .map((card, index) => ({ card, index }))
+      .filter(({ card }) => ranks.has(card.rank) && (card.suit !== trump || room.centerDeck.length === 0))
+      .sort((a, b) => byCost(a.card, b.card));
+    if (options.length > 0 && (round.taking || Math.random() < 0.7)) {
+      return { type: "DURAK_ATTACK", cardIndex: options[0].index };
+    }
+    return { type: "DURAK_DONE" };
   }
 
   // -------------------------------------------------------------------------
@@ -2039,7 +2553,7 @@ export class GameEngine {
   }
 
   private applyMatchRewards(room: GameRoom): void {
-    if (!room.loserPlayerId) {
+    if (!room.loserPlayerId && room.finalRankingPlayerIds.length === 0) {
       return;
     }
 
@@ -2228,6 +2742,7 @@ export class GameEngine {
     room.matchRewards = null;
     room.discardPile = [];
     room.pendingThree = null;
+    room.durak = null;
     // gameType ir lastChampionPlayerId ISLIEKA - cempionas pradeda kita maca.
     room.dealerLog = ["Naujas zaidimas - laukiame pradzios"];
   }

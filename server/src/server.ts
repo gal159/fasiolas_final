@@ -693,7 +693,9 @@ const createRoomSchema = z.object({
   profile: profileSchema.optional(),
   password: z.string().trim().max(32).optional(),
   // Seni klientai lauko nesiuncia - jiems visada fasiolas.
-  gameType: z.enum(["fasiolas", "nnn"]).optional().default("fasiolas"),
+  gameType: z.enum(["fasiolas", "nnn", "durak"]).optional().default("fasiolas"),
+  // Nesant: durak - 7..A (short), kiti - pilna kalade.
+  deckSize: z.enum(["full", "short"]).optional(),
 });
 
 const joinRoomSchema = z.object({
@@ -961,6 +963,7 @@ io.on("connection", (socket) => {
             registeredAt: resolvedAuthUser?.createdAt,
             password: parsed.password ?? null,
             gameType: parsed.gameType,
+            deckSize: parsed.deckSize,
           });
           socket.data.roomCode = roomCode;
           socket.data.playerId = playerId;
