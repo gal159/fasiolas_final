@@ -10062,3 +10062,61 @@ button.lobbyJoinBtn:disabled {
 .durakActionDock .nnnCardPick.selected {
   transform: translateY(-8px);
 }
+
+/* Durak dokas: kompaktiskas, kad nedengtu stalo centro (atakos poru). */
+.durakActionDock {
+  gap: 4px;
+  padding: 6px 8px;
+}
+.durakActionDock .playingActionCards {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  max-height: none;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 10px 4px 2px;
+  scrollbar-width: thin;
+}
+.durakActionDock .playingActionCards::-webkit-scrollbar {
+  display: block;
+  height: 4px;
+}
+.durakActionDock .playingActionCardPick {
+  flex: none;
+}
+.durakActionDock .playingActionCardPick .playingCard.compact {
+  width: 46px;
+  height: 66px;
+}
+.durakActionDock .nnnPileHint {
+  font-size: 12px;
+}
+.durakActionDock .playingActionSortRow {
+  display: none;
+}
+.durakTable {
+  /* roundTableCenter yra stalo viduryje - pakeliam pora virs doko */
+  transform: translateY(-24px);
+}
+.durakPair .playingCard.compact {
+  width: 52px;
+  height: 74px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .durakActionDock .nnnCardPick.selected {
+    transition: none;
+  }
+}
+
+/* Durak: tekstai stalo centre eina is eiles, ne absoliuciai (be persidengimo). */
+.durakTable .nnnPileInfo {
+  position: static;
+  transform: none;
+}
+.durakTable .durakRoles {
+  text-align: center;
+  color: rgba(235, 245, 255, 0.9);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
