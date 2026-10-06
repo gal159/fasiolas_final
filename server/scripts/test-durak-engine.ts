@@ -145,4 +145,42 @@ for (const gameType of ["fasiolas", "nnn"] as const) {
   assert(threw, "999 su 7..A kalade leidzia ne daugiau kaip 3 zaidejus");
 }
 
+// debugSetHands: deterministines scenarijus (testavimo API pagrindas).
+{
+  const engine = new GameEngine();
+  const { roomCode, playerId: hostId } = engine.createRoom("T", "s", undefined, { gameType: "durak", deckSize: "short" });
+  const { playerId: botId } = engine.addBot(roomCode);
+  engine.startGame(roomCode);
+  engine.debugSetHands(
+    roomCode,
+    {
+      [hostId]: [
+        { suit: "H", rank: "7" },
+        { suit: "S", rank: "7" },
+        { suit: "D", rank: "A" },
+      ],
+      [botId]: [
+        { suit: "H", rank: "8" },
+        { suit: "C", rank: "9" },
+      ],
+    },
+    { trumpSuit: "H", currentTurnPlayerId: hostId },
+  );
+  const view = engine.getClientState(roomCode, hostId);
+  assert(view.yourHand.length === 3, "debugSetHands: host rankoje 3 kortos");
+  assert(view.state.trumpSuit === "H", "debugSetHands: koziris H");
+  assert(view.state.currentTurnPlayerId === hostId, "debugSetHands: eile hostui");
+  assert(view.state.durak?.attackerId === hostId && view.state.durak.defenderId === botId, "debugSetHands: roles");
+  assert(view.state.centerDeckCount === 32 - 5, "debugSetHands: kalade perskaiciuota (27)");
+  assert(view.state.durak?.trumpCard?.suit === "H", "debugSetHands: kozirio korta apacioje");
+  engine.applyTurnAction(roomCode, hostId, { type: "DURAK_ATTACK", cardIndex: 1 });
+  let threw = false;
+  try {
+    engine.debugSetHands(roomCode, { [hostId]: [{ suit: "H", rank: "7" }, { suit: "H", rank: "7" }] });
+  } catch {
+    threw = true;
+  }
+  assert(threw, "debugSetHands: dublikatai atmetami");
+}
+
 console.log(`OK: ${totalGames} Durak partiju (lygiosios: ${draws}), kalades full/short, Fasiolas/999 short patikra`);

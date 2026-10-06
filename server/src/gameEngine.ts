@@ -411,7 +411,8 @@ export type ActionAnimationRecord = ActionAnimatedEvent & {
 
 const BOT_NAMES = ["Botas Vytas", "Botas Aldona", "Botas Zenonas", "Botas Grazina", "Botas Kazys", "Botas Birute"];
 
-const BOT_ACTION_DELAY_MS = 800;
+// Testams galima pagreitinti: BOT_ACTION_DELAY_MS=50.
+const BOT_ACTION_DELAY_MS = Number(process.env.BOT_ACTION_DELAY_MS ?? 800);
 
 export class GameEngine {
   private readonly rooms = new Map<string, GameRoom>();
@@ -647,6 +648,81 @@ export class GameEngine {
     }
 
     return { type: "TAKE_PILE" };
+  }
+
+  // Tik testams (E2E_TEST_API): nustato zaideju rankas, o kalade perskaiciuojama
+  // is likusiu kortu. Veikia Durak ir 999 PLAYING fazeje.
+  public debugSetHands(
+    roomCode: string,
+    hands: Record<string, Card[]>,
+    options?: { trumpSuit?: Suit; currentTurnPlayerId?: string },
+  ): void {
+    const room = this.getRoomOrThrow(roomCode);
+    if (room.phase !== "PLAYING") {
+      throw new Error("Rankas galima nustatyti tik PLAYING fazeje");
+    }
+    const used = new Set<string>();
+    const key = (c: Card): string => `${c.rank}${c.suit}`;
+    for (const [playerId, cards] of Object.entries(hands)) {
+      this.getPlayerOrThrow(room, playerId);
+      for (const card of cards) {
+        if (!ranksFor(room.deckSize).includes(card.rank)) {
+          throw new Error(`Korta ${key(card)} nepriklauso kaladei`);
+        }
+        if (used.has(key(card))) {
+          throw new Error(`Kartojasi korta ${key(card)}`);
+        }
+        used.add(key(card));
+      }
+    }
+    for (const p of room.players) {
+      if (!(p.id in hands)) {
+        for (const c of p.cards) {
+          if (used.has(key(c))) {
+            throw new Error(`Korta ${key(c)} jau naudojama kito zaidejo`);
+          }
+          used.add(key(c));
+        }
+      }
+    }
+    for (const [playerId, cards] of Object.entries(hands)) {
+      this.getPlayerOrThrow(room, playerId).cards = cards.map((c) => ({ ...c }));
+    }
+    for (const pair of room.durak?.pairs ?? []) {
+      used.add(key(pair.attack));
+      if (pair.defense) used.add(key(pair.defense));
+    }
+    room.centerDeck = createDeck(room.deckSize).filter((c) => !used.has(key(c)));
+    room.discardPile = [];
+    if (options?.trumpSuit) {
+      room.trumpSuit = options.trumpSuit;
+      // Kozirio korta - apatine kalades korta: perkeliam kozirio mastes korta i pradzia.
+      const idx = room.centerDeck.findIndex((c) => c.suit === options.trumpSuit);
+      if (idx > 0) {
+        const [trumpCard] = room.centerDeck.splice(idx, 1);
+        room.centerDeck.unshift(trumpCard);
+      }
+    }
+    if (options?.currentTurnPlayerId) {
+      this.getPlayerOrThrow(room, options.currentTurnPlayerId);
+      room.currentTurnPlayerId = options.currentTurnPlayerId;
+      if (room.durak) {
+        room.durak.pairs = [];
+        room.durak.taking = false;
+        room.durak.attackerId = options.currentTurnPlayerId;
+        const defender = this.durakNextActive(room, options.currentTurnPlayerId);
+        if (defender) {
+          room.durak.defenderId = defender.id;
+          room.durak.attackLimit = Math.min(DURAK_HAND_SIZE, defender.cards.length);
+          room.durak.attackerOrder = this.durakOrderFrom(room, options.currentTurnPlayerId)
+            .filter((p) => p.id !== defender.id)
+            .map((p) => p.id);
+          room.durak.attackerPos = 0;
+          room.durak.passes = 0;
+        }
+      }
+    }
+    this.resetTurnTimer(room);
   }
 
   public expireTurnTimers(now = Date.now()): string[] {

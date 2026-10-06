@@ -42,7 +42,12 @@ const APP_SECRET = process.env.APP_SECRET ?? "dev-secret-change-me";
 const REGISTRATION_STARTER_POINTS = 250;
 const RESEND_API_KEY = process.env.RESEND_API_KEY?.trim() || null;
 const MAIL_FROM = process.env.MAIL_FROM?.trim() || "Fasiolas <onboarding@resend.dev>";
-const ALLOWED_ORIGINS_RAW = process.env.ALLOWED_ORIGINS ?? CLIENT_URL;
+// Lokaliai (be ALLOWED_ORIGINS) leidziam ir 127.0.0.1 - patogu naršyklės testams.
+const ALLOWED_ORIGINS_RAW =
+  process.env.ALLOWED_ORIGINS ??
+  (process.env.NODE_ENV === "production" ? CLIENT_URL : `${CLIENT_URL},${CLIENT_URL.replace("localhost", "127.0.0.1")}`);
+// Testavimo API (/test/*) isjungtas, nebent E2E_TEST_API=1 (niekada produkcijoje).
+const E2E_TEST_API = process.env.E2E_TEST_API === "1" && process.env.NODE_ENV !== "production";
 
 function normalizeOrigin(value: string): string {
   return value.trim().replace(/\/+$/, "").toLowerCase();
@@ -872,6 +877,45 @@ function isValidAdminSecret(provided: string): boolean {
   const providedHash = createHash("sha256").update(provided).digest();
   const expectedHash = createHash("sha256").update(APP_SECRET).digest();
   return timingSafeEqual(providedHash, expectedHash);
+}
+
+// Testavimo endpoint'ai: tik su E2E_TEST_API=1 ir X-App-Secret. Leidzia nustatyti pradines rankas.
+const testSetHandsSchema = z.object({
+  roomCode: z.string().trim().min(2).max(12),
+  hands: z.record(
+    z.string(),
+    z.array(
+      z.object({
+        suit: z.enum(["S", "H", "D", "C"]),
+        rank: z.enum(["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"]),
+      }),
+    ),
+  ),
+  trumpSuit: z.enum(["S", "H", "D", "C"]).optional(),
+  currentTurnPlayerId: z.string().optional(),
+});
+
+if (E2E_TEST_API) {
+  app.post("/test/set-hands", (req, res) => {
+    const providedSecret = req.header("x-app-secret") ?? "";
+    if (!providedSecret || !isValidAdminSecret(providedSecret)) {
+      res.status(401).json({ ok: false, error: "Unauthorized" });
+      return;
+    }
+    try {
+      const parsed = testSetHandsSchema.parse(req.body);
+      engine.debugSetHands(parsed.roomCode, parsed.hands, {
+        trumpSuit: parsed.trumpSuit,
+        currentTurnPlayerId: parsed.currentTurnPlayerId,
+      });
+      emitRoomState(parsed.roomCode);
+      engine.kickBots(parsed.roomCode);
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(400).json({ ok: false, error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+  console.log("E2E_TEST_API ijungtas: /test/set-hands prieinamas");
 }
 
 app.post("/admin/grant-points", async (req, res) => {

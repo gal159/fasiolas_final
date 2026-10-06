@@ -2835,6 +2835,23 @@ function App() {
     setAppStage('profileSetup')
   }
 
+  // Dev testavimas: ?e2e=1 (tik vite dev) praleidzia auth ir veikejo pasirinkima.
+  const e2eBypass = import.meta.env.DEV && new URLSearchParams(window.location.search).get('e2e') === '1'
+  useEffect(() => {
+    if (!e2eBypass) {
+      return
+    }
+    const timer = window.setTimeout(() => {
+      if (appStage === 'auth') {
+        startGuestSession()
+      } else if (appStage === 'profileSetup') {
+        void completeProfileSetup()
+      }
+    }, 0)
+    return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [e2eBypass, appStage])
+
   function handleLogout(): void {
     if (roomCode) {
       socket?.emit('leave_room', {})
@@ -3072,7 +3089,7 @@ function App() {
           <div className="authDivider">
             <span>arba</span>
           </div>
-          <button type="button" className="authGuest" onClick={startGuestSession}>
+          <button type="button" className="authGuest" data-testid="guest-play" onClick={startGuestSession}>
             Zaisti be paskyros
           </button>
           {roomCodeInput ? (
@@ -3111,7 +3128,7 @@ function App() {
 
           <div className="profileOnboardingAvatarName">{AVATAR_LABELS[profileDraft.avatarId]}</div>
 
-          <button type="button" className="profileOnboardingConfirm" onClick={() => { void completeProfileSetup() }}>
+          <button type="button" className="profileOnboardingConfirm" data-testid="profile-confirm" onClick={() => { void completeProfileSetup() }}>
             Testi i zaidimo centra
           </button>
           {error ? <div className="error">{error}</div> : null}
@@ -3203,15 +3220,15 @@ function App() {
                 </div>
               </div>
               <div className="actions menuActionsGrid">
-                <button className="menuTile tilePurple" onClick={createRoom}>
+                <button className="menuTile tilePurple" data-testid="create-room" onClick={createRoom}>
                   <span className="tileIcon" aria-hidden="true">+</span>
                   Sukurti kambari
                 </button>
-                <button className="menuTile tileGreen" onClick={() => joinRoom()}>
+                <button className="menuTile tileGreen" data-testid="join-room" onClick={() => joinRoom()}>
                   <span className="tileIcon" aria-hidden="true">&#8614;</span>
                   Prisijungti
                 </button>
-                <button className="menuTile tilePink" disabled={!roomCode} onClick={startGame}>
+                <button className="menuTile tilePink" data-testid="start-game" disabled={!roomCode} onClick={startGame}>
                   <span className="tileIcon" aria-hidden="true">&#9654;</span>
                   Pradeti zaidima
                 </button>
@@ -3220,7 +3237,7 @@ function App() {
                   {inviteCopied ? 'Nukopijuota!' : 'Kopijuoti kvietima'}
                 </button>
                 {payload?.state.phase === 'LOBBY' ? (
-                  <button className="menuTile tileGreen" type="button" onClick={() => emitAck('add_bot', {})}>
+                  <button className="menuTile tileGreen" type="button" data-testid="add-bot" onClick={() => emitAck('add_bot', {})}>
                     <span className="tileIcon" aria-hidden="true">&#129302;</span>
                     Iskviesti bota
                   </button>
@@ -3233,6 +3250,7 @@ function App() {
                 <button
                   key={type}
                   type="button"
+                  data-testid={`game-type-${type}`}
                   role="radio"
                   aria-checked={selectedGameType === type}
                   className={selectedGameType === type ? 'gameTypeOption active' : 'gameTypeOption'}
@@ -3250,6 +3268,7 @@ function App() {
                 <button
                   key={size}
                   type="button"
+                  data-testid={`deck-size-${size}`}
                   role="radio"
                   aria-checked={selectedDeckSize === size}
                   className={selectedDeckSize === size ? 'gameTypeOption active' : 'gameTypeOption'}
@@ -3623,6 +3642,8 @@ function App() {
                         <button
                           key={`durak-dock-${card.rank}${card.suit}-${index}`}
                           type="button"
+                          data-testid="durak-card"
+                          data-card={`${card.rank}${card.suit}`}
                           className={[
                             'playingActionCardPick',
                             'nnnCardPick',
@@ -3643,6 +3664,7 @@ function App() {
                       <>
                         <button
                           type="button"
+                          data-testid="durak-take"
                           disabled={!isMyTurn || durakState.taking || durakUndefendedCount === 0}
                           onClick={() => sendAction({ type: 'DURAK_TAKE' })}
                         >
@@ -3650,6 +3672,7 @@ function App() {
                         </button>
                         <button
                           type="button"
+                          data-testid="durak-transfer"
                           disabled={
                             !isMyTurn ||
                             durakState.taking ||
@@ -3671,6 +3694,7 @@ function App() {
                     ) : (
                       <button
                         type="button"
+                        data-testid="durak-done"
                         disabled={
                           !isMyTurn ||
                           durakState.pairs.length === 0 ||
@@ -3924,6 +3948,7 @@ function App() {
                           <button
                             key={`durak-pair-${pairIndex}-${pair.attack.rank}${pair.attack.suit}`}
                             type="button"
+                            data-testid="durak-pair"
                             className={['durakPair', pair.defense ? 'defended' : '', canTarget ? 'targetable' : ''].filter(Boolean).join(' ')}
                             disabled={!canTarget}
                             onClick={() => handleDurakPairClick(pairIndex)}

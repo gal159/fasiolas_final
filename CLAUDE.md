@@ -18,6 +18,22 @@ npx tsc -b --force                  # typecheck
 npx vite build                      # pries kiekviena commit
 ```
 
+## E2E testavimas (Playwright)
+
+```bash
+cd client && PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium npx playwright test
+```
+- `client/playwright.config.ts` pats paleidzia serveri (laikina DB `DATA_DIR=/tmp/fasiolas-e2e-data`,
+  `E2E_TEST_API=1`, `BOT_ACTION_DELAY_MS=50`) ir klienta; `server/data/auth-users.db` nesikeicia.
+- Dev apejimas: `http://localhost:5173/?e2e=1` (tik vite dev) praleidzia auth ir veikejo pasirinkima — iskart hub.
+- Testams yra `data-testid`: `create-room`, `join-room`, `start-game`, `add-bot`, `game-type-{fasiolas|nnn|durak}`,
+  `deck-size-{full|short}`, `durak-card`, `durak-pair`, `durak-take`, `durak-transfer`, `durak-done`.
+- Testavimo API (tik `E2E_TEST_API=1`, ne produkcijoje, `X-App-Secret`): `POST /test/set-hands`
+  `{roomCode, hands: {playerId: Card[]}, trumpSuit?, currentTurnPlayerId?}` — nustato rankas, kalade perskaiciuojama.
+- Naršykle is 127.0.0.1 taip pat leidziama (CORS), jei `ALLOWED_ORIGINS` nenurodytas.
+- `BOT_ACTION_DELAY_MS` env pagreitina botus (numatyta 800).
+- Cloud sesijoje `.claude/hooks/session-start.sh` pats paleidzia `npm install` serveryje ir kliente.
+
 Testu framework'o nera — verifikacija per Playwright skriptus (playwright yra
 client/node_modules) ir socket.io-client botus. E2E sablonas: registruok nauja
 vartotoja -> prisijunk -> `Testi i zaidimo centra` -> veiksmai. Pilnam zaidimui
