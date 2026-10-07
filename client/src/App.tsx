@@ -33,6 +33,7 @@ import {
   type ShopItemType,
   type TurnAction,
 } from '../../shared/src/types'
+import { Icon } from './Icon'
 import './App.css'
 import * as sfx from './sfx'
 
@@ -3082,8 +3083,8 @@ function App() {
             </button>
           </form>
           {authMode === 'forgot' || authMode === 'reset' ? (
-            <button type="button" className="authLink authBackLink" onClick={() => switchAuthMode('login')}>
-              Grizti i prisijungima
+            <button type="button" className="authLink authBackLink" aria-label="Grizti i prisijungima" title="Grizti i prisijungima" onClick={() => switchAuthMode('login')}>
+              <Icon name="back" /> Prisijungimas
             </button>
           ) : null}
           <div className="authDivider">
@@ -3146,31 +3147,32 @@ function App() {
         <div className="topNav">
           <span className="topNavLogo">FASIOLAS</span>
           <nav className="topNavItems" aria-label="Pagrindinis meniu">
-            <button type="button" className="topNavItem" onClick={() => setShowMarketplaceWindow(true)}>
-              <span className="topNavIcon" aria-hidden="true">🛒</span>
-              Marketplace
+            <button type="button" className="topNavItem iconButton" aria-label="Marketplace" title="Marketplace" onClick={() => setShowMarketplaceWindow(true)}>
+              <Icon name="cart" />
             </button>
-            <button type="button" className="topNavItem" onClick={() => setShowLeaderboard(true)}>
-              <span className="topNavIcon" aria-hidden="true">🏆</span>
-              Lyderiai
+            <button type="button" className="topNavItem iconButton" aria-label="Lyderiai" title="Lyderiai" onClick={() => setShowLeaderboard(true)}>
+              <Icon name="trophy" />
             </button>
-            <button type="button" className="topNavItem" onClick={() => setShowRules(true)}>
-              <span className="topNavIcon" aria-hidden="true">❔</span>
-              Kaip zaisti
+            <button type="button" className="topNavItem iconButton" aria-label="Kaip zaisti" title="Kaip zaisti" onClick={() => setShowRules(true)}>
+              <Icon name="info" />
             </button>
             <button
               type="button"
-              className="topNavItem"
+              className="topNavItem iconButton"
+              aria-label={soundMuted ? 'Ijungti garsa' : 'Isjungti garsa'}
+              aria-pressed={soundMuted}
+              title={soundMuted ? 'Ijungti garsa' : 'Isjungti garsa'}
               onClick={() => {
                 sfx.setMuted(!soundMuted)
                 setSoundMuted(!soundMuted)
               }}
             >
-              <span className="topNavIcon" aria-hidden="true">{soundMuted ? '🔇' : '🔊'}</span>
-              Garsai
+              <Icon name={soundMuted ? 'volumeOff' : 'volume'} />
             </button>
           </nav>
-          <button type="button" className="topNavCta" onClick={handleLogout}>Atsijungti</button>
+          <button type="button" className="topNavCta iconButton" aria-label="Atsijungti" title="Atsijungti" onClick={handleLogout}>
+            <Icon name="logout" />
+          </button>
         </div>
       </header>
 
@@ -3404,7 +3406,9 @@ function App() {
           <article className="profileWindow panel marketplaceWindow">
             <div className="profileWindowHeader">
               <h2>Marketplace</h2>
-              <button type="button" onClick={() => { setShowMarketplaceWindow(false); void saveProfile() }}>Uzdaryti</button>
+              <button type="button" className="iconButton" aria-label="Uzdaryti" title="Uzdaryti" onClick={() => { setShowMarketplaceWindow(false); void saveProfile() }}>
+                <Icon name="close" />
+              </button>
             </div>
 
             <div className="profileWindowBody marketplaceBody">
@@ -3440,7 +3444,9 @@ function App() {
           <article className="profileWindow panel leaderboardWindow">
             <div className="profileWindowHeader">
               <h2>Lyderiu lentele</h2>
-              <button type="button" onClick={() => setShowLeaderboard(false)}>Uzdaryti</button>
+              <button type="button" className="iconButton" aria-label="Uzdaryti" title="Uzdaryti" onClick={() => setShowLeaderboard(false)}>
+                <Icon name="close" />
+              </button>
             </div>
             <div className="profileWindowBody leaderboardBody">
               {leaderboardLoading && leaderboard.length === 0 ? (
@@ -3491,8 +3497,10 @@ function App() {
                   onClick={() => setTableScale((prev) => Math.round(clampTableScale(prev - TABLE_SCALE_STEP) * 100) / 100)}
                   disabled={tableScale <= TABLE_SCALE_MIN}
                   title="Sumazinti stalo mastele"
+                  aria-label="Sumazinti stalo mastele"
+                  className="iconButton"
                 >
-                  -
+                  <Icon name="minus" size={18} />
                 </button>
                 <span className="tableScaleValue">{Math.round(tableScale * 100)}%</span>
                 <button
@@ -3500,31 +3508,45 @@ function App() {
                   onClick={() => setTableScale((prev) => Math.round(clampTableScale(prev + TABLE_SCALE_STEP) * 100) / 100)}
                   disabled={tableScale >= TABLE_SCALE_MAX}
                   title="Padidinti stalo mastele"
+                  aria-label="Padidinti stalo mastele"
+                  className="iconButton"
                 >
-                  +
+                  <Icon name="plus" size={18} />
                 </button>
               </div>
               <h2>Stalo langas</h2>
               <button
+                type="button"
+                className="iconButton"
+                aria-label={soundMuted ? 'Ijungti garsa' : 'Garsas'}
+                aria-pressed={soundMuted}
+                title={soundMuted ? 'Ijungti garsa' : 'Isjungti garsa'}
                 onClick={() => {
                   sfx.setMuted(!soundMuted)
                   setSoundMuted(!soundMuted)
                 }}
               >
-                {soundMuted ? 'Be garso' : 'Garsas'}
+                <Icon name={soundMuted ? 'volumeOff' : 'volume'} />
               </button>
-              <button onClick={() => setShowRules(true)}>Taisykles</button>
+              <button type="button" className="iconButton" aria-label="Taisykles" title="Taisykles" onClick={() => setShowRules(true)}>
+                <Icon name="info" />
+              </button>
               {payload.state.phase === 'DEALING' ? (
                 <button
                   type="button"
                   onClick={() => setShowMyHand((prev) => !prev)}
                   disabled={showFasiolasContribution}
-                  title={showFasiolasContribution ? 'Pirma atsiskaityk fasiolui' : undefined}
+                  className="iconButton"
+                  aria-label={showMyHand ? 'Slepti kortas' : 'Mano kortos'}
+                  aria-pressed={showMyHand}
+                  title={showFasiolasContribution ? 'Pirma atsiskaityk fasiolui' : showMyHand ? 'Slepti kortas' : 'Mano kortos'}
                 >
-                  {showMyHand ? 'Slepti kortas' : 'Mano kortos'}
+                  <Icon name="hand" />
                 </button>
               ) : null}
-              <button onClick={() => setShowTableWindow(false)}>Uzdaryti</button>
+              <button type="button" className="iconButton" aria-label="Uzdaryti" title="Uzdaryti" onClick={() => setShowTableWindow(false)}>
+                <Icon name="close" />
+              </button>
             </div>
             {error ? <div className="tableInlineError">{error}</div> : null}
 
@@ -3583,17 +3605,17 @@ function App() {
                   <div className="playingActionSortRow">
                     <button
                       type="button"
-                      className={playingHandSortMode === 'suit' ? 'playingSortButton active' : 'playingSortButton'}
+                      className={playingHandSortMode === 'suit' ? 'playingSortButton active' : 'playingSortButton'} aria-label="Rikiuoti pagal zenkla" title="Rikiuoti pagal zenkla"
                       onClick={() => setPlayingHandSortMode('suit')}
                     >
-                      Rikiuoti pagal zenkla
+                      <Icon name="sortSuit" size={18} />
                     </button>
                     <button
                       type="button"
-                      className={playingHandSortMode === 'rank' ? 'playingSortButton active' : 'playingSortButton'}
+                      className={playingHandSortMode === 'rank' ? 'playingSortButton active' : 'playingSortButton'} aria-label="Rikiuoti pagal verte" title="Rikiuoti pagal verte"
                       onClick={() => setPlayingHandSortMode('rank')}
                     >
-                      Rikiuoti pagal verte
+                      <Icon name="sortRank" size={18} />
                     </button>
                   </div>
                   <div className="playingActionCards">
@@ -3622,17 +3644,17 @@ function App() {
                   <div className="playingActionSortRow">
                     <button
                       type="button"
-                      className={playingHandSortMode === 'suit' ? 'playingSortButton active' : 'playingSortButton'}
+                      className={playingHandSortMode === 'suit' ? 'playingSortButton active' : 'playingSortButton'} aria-label="Rikiuoti pagal zenkla" title="Rikiuoti pagal zenkla"
                       onClick={() => setPlayingHandSortMode('suit')}
                     >
-                      Rikiuoti pagal zenkla
+                      <Icon name="sortSuit" size={18} />
                     </button>
                     <button
                       type="button"
-                      className={playingHandSortMode === 'rank' ? 'playingSortButton active' : 'playingSortButton'}
+                      className={playingHandSortMode === 'rank' ? 'playingSortButton active' : 'playingSortButton'} aria-label="Rikiuoti pagal verte" title="Rikiuoti pagal verte"
                       onClick={() => setPlayingHandSortMode('rank')}
                     >
-                      Rikiuoti pagal verte
+                      <Icon name="sortRank" size={18} />
                     </button>
                   </div>
                   <div className="playingActionCards">
@@ -3665,14 +3687,18 @@ function App() {
                         <button
                           type="button"
                           data-testid="durak-take"
+                          aria-label="Imu kortas"
+                          title="Imu kortas"
                           disabled={!isMyTurn || durakState.taking || durakUndefendedCount === 0}
                           onClick={() => sendAction({ type: 'DURAK_TAKE' })}
                         >
-                          Imu
+                          <Icon name="take" />
                         </button>
                         <button
                           type="button"
                           data-testid="durak-transfer"
+                          aria-label="Perkelti ataka"
+                          title="Perkelti ataka"
                           disabled={
                             !isMyTurn ||
                             durakState.taking ||
@@ -3688,13 +3714,15 @@ function App() {
                             sendAction({ type: 'DURAK_TRANSFER', cardIndex: selectedDurakIndex })
                           }}
                         >
-                          Perkelti
+                          <Icon name="swap" />
                         </button>
                       </>
                     ) : (
                       <button
                         type="button"
                         data-testid="durak-done"
+                        aria-label={durakState.taking ? 'Pakanka' : 'Bita'}
+                        title={durakState.taking ? 'Pakanka' : 'Bita'}
                         disabled={
                           !isMyTurn ||
                           durakState.pairs.length === 0 ||
@@ -3702,7 +3730,7 @@ function App() {
                         }
                         onClick={() => sendAction({ type: 'DURAK_DONE' })}
                       >
-                        {durakState.taking ? 'Pakanka' : 'Bita'}
+                        <Icon name="check" />
                       </button>
                     )}
                   </div>
@@ -3730,17 +3758,17 @@ function App() {
                   <div className="playingActionSortRow">
                     <button
                       type="button"
-                      className={playingHandSortMode === 'suit' ? 'playingSortButton active' : 'playingSortButton'}
+                      className={playingHandSortMode === 'suit' ? 'playingSortButton active' : 'playingSortButton'} aria-label="Rikiuoti pagal zenkla" title="Rikiuoti pagal zenkla"
                       onClick={() => setPlayingHandSortMode('suit')}
                     >
-                      Rikiuoti pagal zenkla
+                      <Icon name="sortSuit" size={18} />
                     </button>
                     <button
                       type="button"
-                      className={playingHandSortMode === 'rank' ? 'playingSortButton active' : 'playingSortButton'}
+                      className={playingHandSortMode === 'rank' ? 'playingSortButton active' : 'playingSortButton'} aria-label="Rikiuoti pagal verte" title="Rikiuoti pagal verte"
                       onClick={() => setPlayingHandSortMode('rank')}
                     >
-                      Rikiuoti pagal verte
+                      <Icon name="sortRank" size={18} />
                     </button>
                   </div>
                   <div className="playingActionCards">
@@ -3796,17 +3824,21 @@ function App() {
                         payload.yourHand[selectedHandIndexes[0]]?.rank === '3' ||
                         Boolean(flyingPlayedCard)
                       }
+                      aria-label="Zaisti pazymetas kortas"
+                      title="Zaisti pazymetas kortas"
                       onClick={(event) => playSelectedNnnCards(event.currentTarget)}
                     >
-                      Zaisti ({selectedHandIndexes.length})
+                      <Icon name="play" /> {selectedHandIndexes.length}
                     </button>
                   )}
                   <button
                     type="button"
                     disabled={!isMyTurn || payload.state.tableStack.length === 0}
+                    aria-label="Paimti kruva"
+                    title="Paimti kruva"
                     onClick={() => sendAction({ type: 'TAKE_PILE' })}
                   >
-                    Paimti kruva ({payload.state.tableStack.length})
+                    <Icon name="take" /> {payload.state.tableStack.length}
                   </button>
                   {payload.yourHand.length === 0 &&
                   (me?.faceUpCards?.length ?? 0) === 0 &&
@@ -3836,17 +3868,17 @@ function App() {
                   <div className="playingActionSortRow">
                     <button
                       type="button"
-                      className={playingHandSortMode === 'suit' ? 'playingSortButton active' : 'playingSortButton'}
+                      className={playingHandSortMode === 'suit' ? 'playingSortButton active' : 'playingSortButton'} aria-label="Rikiuoti pagal zenkla" title="Rikiuoti pagal zenkla"
                       onClick={() => setPlayingHandSortMode('suit')}
                     >
-                      Rikiuoti pagal zenkla
+                      <Icon name="sortSuit" size={18} />
                     </button>
                     <button
                       type="button"
-                      className={playingHandSortMode === 'rank' ? 'playingSortButton active' : 'playingSortButton'}
+                      className={playingHandSortMode === 'rank' ? 'playingSortButton active' : 'playingSortButton'} aria-label="Rikiuoti pagal verte" title="Rikiuoti pagal verte"
                       onClick={() => setPlayingHandSortMode('rank')}
                     >
-                      Rikiuoti pagal verte
+                      <Icon name="sortRank" size={18} />
                     </button>
                   </div>
                   <div className="playingActionCards">
@@ -3873,9 +3905,11 @@ function App() {
                   <button
                     type="button"
                     disabled={!isMyTurn}
+                    aria-label="Paimti seniausia nuo stalo"
+                    title="Paimti seniausia nuo stalo"
                     onClick={() => sendAction({ type: 'TAKE_OLDEST' })}
                   >
-                    Paimti seniausia nuo stalo
+                    <Icon name="take" />
                   </button>
                 </div>
               ) : null}
@@ -4356,7 +4390,7 @@ function App() {
               aria-label="Uzdaryti taisykles"
               onClick={() => setShowRules(false)}
             >
-              X
+              <Icon name="close" />
             </button>
             <h2>Kaip zaisti Fasiola</h2>
             <h3>Tikslas</h3>
@@ -4381,7 +4415,9 @@ function App() {
             <h3>Taskai</h3>
             <p>Registracija: +250 tasku. Kiekvienas suzaistas match: +200 visiems. Vietos bonusai: 1 vieta +200, 2 vieta +100, 3 vieta +50. Uz taskus Marketplace atrakinsi avatarus, kortu nugareles, stalus ir profilio korteles.</p>
             <div className="resultsActions">
-              <button type="button" onClick={() => setShowRules(false)}>Uzdaryti</button>
+              <button type="button" className="iconButton" aria-label="Uzdaryti" title="Uzdaryti" onClick={() => setShowRules(false)}>
+                <Icon name="close" />
+              </button>
             </div>
           </article>
         </section>

@@ -49,3 +49,20 @@ test('Fasiolas su 7-A kalade startuoja', async ({ page }) => {
   await createRoomWithBots(page, { gameType: 'fasiolas', deckSize: 'short', bots: 1 })
   await expect(page.locator('.tableWindowOverlay, .tableWindow').first()).toBeVisible({ timeout: 10_000 })
 })
+
+test('ikonu mygtukai turi prieinamus pavadinimus (aria-label)', async ({ page }) => {
+  await openHub(page)
+  for (const name of ['Marketplace', 'Lyderiai', 'Kaip zaisti', 'Atsijungti']) {
+    await expect(page.getByRole('button', { name, exact: true })).toBeVisible()
+  }
+  await expect(page.getByRole('button', { name: /garsa/i }).first()).toBeVisible()
+  await createRoomWithBots(page, { gameType: 'durak', deckSize: 'short', bots: 1 })
+  await expect(page.locator('.durakActionDock')).toBeVisible({ timeout: 10_000 })
+  for (const name of ['Taisykles', 'Uzdaryti', 'Padidinti stalo mastele', 'Sumazinti stalo mastele']) {
+    await expect(page.getByRole('button', { name, exact: true })).toBeVisible()
+  }
+  await page.getByRole('button', { name: 'Taisykles', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'Zaidimo taisykles' })).toBeVisible()
+  await page.getByRole('button', { name: 'Uzdaryti taisykles' }).click()
+  await expect(page.getByRole('dialog', { name: 'Zaidimo taisykles' })).toHaveCount(0)
+})

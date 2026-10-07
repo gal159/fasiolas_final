@@ -10120,3 +10120,84 @@ button.lobbyJoinBtn:disabled {
   color: rgba(235, 245, 255, 0.9);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
+
+/* =========================================================================
+   Ikonu mygtukai (SVG vietoj uzrasu). Paskutinis sluoksnis.
+   ========================================================================= */
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 6px 10px;
+  line-height: 1;
+  transition: transform 0.12s ease, filter 0.15s ease, background-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.iconButton .iconGlyph {
+  flex: none;
+  display: block;
+}
+.iconButton:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.iconButton:focus-visible,
+.gameTypeOption:focus-visible {
+  outline: 2px solid rgba(140, 210, 255, 0.95);
+  outline-offset: 2px;
+}
+.iconButton[aria-pressed='true'] {
+  filter: drop-shadow(0 0 5px rgba(255, 190, 90, 0.7));
+}
+
+/* Top nav: tik ikona - kompaktiskas kvadratas vietoj uzrasu po ikona. */
+.topNavItem.iconButton {
+  flex-direction: row;
+  padding: 8px 12px;
+  min-width: 44px;
+  min-height: 44px;
+}
+.topNavItem.iconButton .iconGlyph {
+  width: 22px;
+  height: 22px;
+}
+.topNavCta.iconButton {
+  padding: 10px 14px;
+  min-width: 46px;
+  min-height: 44px;
+}
+
+/* Stalo lango juosta ir langu antrastes: kvadratines ikonos. */
+.tableWindowHeader .iconButton,
+.profileWindowHeader .iconButton,
+.tableScaleControls .iconButton {
+  padding: 6px 9px;
+}
+.resultsActions .iconButton {
+  min-width: 44px;
+}
+
+/* Durak / 999 dokas: tapo zona >= 40px, kortos nebuna uzdengtos. */
+.durakButtonRow .iconButton,
+.playingActionDock .iconButton {
+  min-width: 44px;
+  min-height: 40px;
+}
+
+@media (hover: none) {
+  .iconButton:hover {
+    filter: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .iconButton {
+    transition: none;
+  }
+  .iconButton:active:not(:disabled) {
+    transform: none;
+  }
+}
